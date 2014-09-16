@@ -19,5 +19,8 @@
   "addons": [
     "heroku-postgresql",
     "redistogo"
-  ]
+  ],
+  "scripts": {
+    "postdeploy": "bundle exec rake db:migrate"
+  }
 }
