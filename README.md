@@ -86,7 +86,9 @@ Toshi can be deployed directly to Heroku:
 
 After it is deployed, you can start syncing with the following command:
 
-    $ heroku ps:scale web=1 peer_manager=1 block_worker=1 transaction_worker=1 --app your-app-name
+    $ heroku scale block_worker=1 peer_manager=1 transaction_worker=2 web=1
+
+For more detailed Heroku deployment instructions you can [read this page](https://github.com/coinbase/toshi/wiki/Deploying-To-Heroku).
 
 Toshi can also be installed on your own server. You will need:
 
