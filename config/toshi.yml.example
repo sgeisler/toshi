@@ -19,4 +19,4 @@ production:
   max_peers: 8
   network: <%= ENV['TOSHI_NETWORK'] || 'bitcoin' %>
   peers: <%= ENV['TOSHI_PEERS'].to_s.split(';') %>
-  redis_url: <%= ENV[ENV['REDIS_PROVIDER'] || 'REDIS_URL'] %>
+  redis_url: <%= ENV['REDIS_URL'] || ENV['REDISTOGO_URL'] || ENV['OPENREDIS_URL'] %>
