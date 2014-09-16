@@ -39,7 +39,6 @@ GEM
       multi_xml (>= 0.5.2)
     json (1.8.1)
     lspace (0.13)
-    mock_redis (0.13.2)
     multi_json (1.10.1)
     multi_xml (0.5.5)
     newrelic_rpm (3.9.4.245)
@@ -79,9 +78,6 @@ GEM
       json
       redis (>= 3.0.6)
       redis-namespace (>= 1.3.1)
-    sidekiq-unique-jobs (3.0.2)
-      mock_redis
-      sidekiq (>= 2.6)
     sinatra (1.4.5)
       rack (~> 1.4)
       rack-protection (~> 1.4)
@@ -119,6 +115,5 @@ DEPENDENCIES
   sequel
   sequel_model
   sidekiq
-  sidekiq-unique-jobs
   sinatra
   sinatra-contrib

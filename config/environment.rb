@@ -40,5 +40,3 @@ if Toshi.env == :test
   Sidekiq::Testing.inline!
 end
 
-# so transaction processors process unique jobs based only on the tx hash
-SidekiqUniqueJobs::Config.unique_args_enabled = true
