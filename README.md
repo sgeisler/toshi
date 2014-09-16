@@ -84,6 +84,10 @@ Toshi can be deployed directly to Heroku:
 
 [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy?template=https://github.com/coinbase/toshi)
 
+After it is deployed, you can start syncing with the following command:
+
+    $ heroku scale block_worker=1 peer_manager=1 transaction_worker=2 web=1
+
 Toshi can also be installed on your own server. You will need:
 
 * PostgreSQL (300gb+ disk space required to sync mainnet)
