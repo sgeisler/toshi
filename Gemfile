@@ -16,6 +16,7 @@ gem 'faye-websocket'
 gem 'bugsnag-em'
 gem 'scrypt'
 gem 'newrelic_rpm'
+gem 'builder'
 
 group :test do
   gem 'rspec'

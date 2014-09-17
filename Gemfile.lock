@@ -15,6 +15,7 @@ GEM
       bugsnag
       eventmachine
       lspace (>= 0.13)
+    builder (3.0.4)
     celluloid (0.15.2)
       timers (~> 1.1.0)
     connection_pool (2.0.0)
@@ -100,6 +101,7 @@ PLATFORMS
 DEPENDENCIES
   bitcoin-ruby!
   bugsnag-em
+  builder
   database_cleaner
   eventmachine
   faye-websocket
