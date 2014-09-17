@@ -599,7 +599,7 @@ module Toshi
               self.block_next_bits_required(block)
             end
           end
-          raise BlockValidationError, "AcceptBlock() : incorrect proof of work"
+          raise BlockValidationError, "AcceptBlock() : incorrect proof of work. Expected: #{next_bits}. Got: #{block.bits}."
         end
       end
 
@@ -1427,9 +1427,17 @@ module Toshi
       # We are on 2016th block, need to find the previous 2016th block and calculate how much to change the difficulty.
       # Go back by what we want to be 14 days worth of blocks within the correct chain.
       # We should not assume anything regarding main/side chain.
+
+      # Litecoin fixed the time warp attack: https://litecoin.info/Time_warp_attack
+      # https://github.com/litecoin-project/litecoin/commit/b1be77210970a6ceb3680412cc3d2f0dd4ca8fb9
+      blockstogoback = retarget_interval - 1
+      if (prev_height + 1) != retarget_interval
+        blockstogoback = retarget_interval;
+      end
+
       first = prev_block_header
       i = 0
-      while first && i < (retarget_interval - 1)
+      while first && i < blockstogoback
         first = @storage.previous_block_header_for_block_header(first)
         i += 1
       end
@@ -1496,7 +1504,7 @@ module Toshi
       max_target = Bitcoin.decode_compact_bits(Bitcoin.network[:proof_of_work_limit]).to_i(16)
 
       # Check the range.
-      if expected_target <= 0 || (max_target > 0 && expected_target > max_target)
+      if expected_target <= 0 || expected_target > max_target
         return false
       end
 
