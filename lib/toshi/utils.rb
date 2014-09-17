@@ -80,7 +80,7 @@ module Toshi
 
       # default is 100; max is 500
       options[:limit] ||= 100
-      options[:limit] = [ [ options[:limit].to_i, 0 ].max, 500 ].min
+      options[:limit] = [ [ options[:limit].to_i, 0 ].max, 1000 ].min
     end
   end
 
