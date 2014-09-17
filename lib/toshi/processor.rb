@@ -1431,7 +1431,7 @@ module Toshi
       # Litecoin fixed the time warp attack: https://litecoin.info/Time_warp_attack
       # https://github.com/litecoin-project/litecoin/commit/b1be77210970a6ceb3680412cc3d2f0dd4ca8fb9
       blockstogoback = retarget_interval - 1
-      if (prev_height + 1) != retarget_interval
+      if Bitcoin.network_name == :litecoin && (prev_height + 1) != retarget_interval
         blockstogoback = retarget_interval;
       end
 
