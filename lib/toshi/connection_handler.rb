@@ -114,13 +114,8 @@ module Toshi
       # already processed it.
       return if Toshi::Models::Transaction.where(hsh: hash.hth).any?
       return if Toshi::Models::UnconfirmedTransaction.where(hsh: hash.hth).any?
-
-      if Toshi::Models::UnconfirmedRawTransaction.where(hsh: hash.hth).any?
-        # already have it downloaded but not imported, try again.
-        Toshi::Workers::TransactionWorker.perform_async hash.hth, { 'sender' => connection_info }
-        return
-      end
-
+      # already saved it. sidekiq will handle retries if necessary.
+      return if Toshi::Models::UnconfirmedRawTransaction.where(hsh: hash.hth).any?
       send_getdata_tx(hash)
     end
 
