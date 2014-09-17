@@ -1,13 +1,11 @@
 require "sidekiq"
-require "sidekiq-unique-jobs"
 
 module Toshi
   module Workers
     class TransactionWorker
       include Sidekiq::Worker
 
-      sidekiq_options unique: true, unique_job_expiration: (5*60), unique_args: ->(args) { [ args.first ] },
-                       queue: :transactions, :retry => true
+      sidekiq_options queue: :transactions, :retry => true
 
       def perform(tx_hash, _sender)
         return if Toshi::Models::Transaction.where(hsh: tx_hash).first
