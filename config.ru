@@ -13,8 +13,15 @@ use Bugsnag::Rack
 app = Rack::URLMap.new(
   '/'          => Toshi::Web::WWW,
   '/api/v0'    => Toshi::Web::Api,
-  '/sidekiq'   => Sidekiq::Web,
 )
+
+map '/sidekiq' do
+  use Rack::Auth::Basic, 'Sidekiq' do |username, password|
+    username == ENV['SIDEKIQ_USERNAME'] && password == ENV['SIDEKIQ_PASSWORD']
+  end
+
+  run Sidekiq::Web
+end
 
 app = Toshi::Web::WebSockets.new(app)
 
