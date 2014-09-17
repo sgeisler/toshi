@@ -536,6 +536,10 @@ html, body {
     white-space: pre !important;
   }
 
+  p > code {
+    word-wrap: break-word;
+  }
+
   aside {
     padding-top: 1em;
     padding-bottom: 1em;
