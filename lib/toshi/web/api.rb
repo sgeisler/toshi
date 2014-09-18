@@ -17,6 +17,7 @@ module Toshi
           when 'hex' then content_type 'text/plain'
           when 'bin' then content_type 'application/octet-stream'
           when 'json' then content_type 'application/json'
+          when 'rss' then content_type 'application/rss+xml'
           end
           fmt
         end
@@ -38,6 +39,8 @@ module Toshi
         case format
         when 'json'
           json @blocks.map(&:to_hash)
+        when 'rss'
+          builder :blocks_rss
         else
           raise InvalidFormatError
         end
