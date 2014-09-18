@@ -1,10 +1,5 @@
 require "toshi/web/base"
 
-unless $client
-  $client = RedisMQ::Channel.new(:client)
-  $client.init_heartbeat
-end
-
 module Toshi
   module Web
 
