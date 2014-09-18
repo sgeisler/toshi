@@ -584,6 +584,17 @@ module Toshi
         res = Toshi.db.fetch("SELECT reltuples AS total FROM pg_class WHERE relname = 'transactions'").first
         res[:total].to_i
       end
+
+      # times are expressed as epoch timestamps; amount is satoshis.
+      def self.transactions_matching_date_range_and_value(start_time, end_time, amount)
+        # first we need to find the block heights
+        start_block = Block.order(Sequel.desc(:time)).where(time: 0..start_time).first
+        end_block = Block.order(Sequel.desc(:time)).where(time: 0..end_time).first if start_block
+        return [] unless start_block && end_block
+        Toshi.db[:address_ledger_entries].join(:transactions, :id => :transaction_id)
+          .where(pool: Transaction::TIP_POOL).where("height >= #{start_block.height}")
+          .where("height <= #{end_block.height}").where("amount = #{amount}").select_map(:hsh)
+      end
     end
   end
 end
