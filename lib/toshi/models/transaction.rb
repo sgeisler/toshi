@@ -67,8 +67,8 @@ module Toshi
             if prev_out
               script = Bitcoin::Script.new(prev_out.script)
               addrs = (script.get_addresses rescue []).uniq
-            elsif branch != Block::ORPHAN_BRANCH
-              # this is expected only for txs in orphan blocks
+            elsif branch == Block::MAIN_BRANCH
+              # this is expected only for txs in side/orphan blocks
               raise "BUG: can't find previous output!"
             end
           end
