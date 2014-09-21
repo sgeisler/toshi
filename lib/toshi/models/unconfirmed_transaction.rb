@@ -488,13 +488,22 @@ module Toshi
       end
 
       def self.remove_all
-        Toshi.db[:unconfirmed_addresses_outputs].truncate
-        Toshi.db[:unconfirmed_ledger_entries].truncate
-        Toshi.db[:unconfirmed_addresses].truncate(:cascade => true)
-        Toshi.db[:unconfirmed_outputs].truncate(:cascade => true)
-        Toshi.db[:unconfirmed_inputs].truncate(:cascade => true)
-        Toshi.db[:unconfirmed_transactions].truncate(:cascade => true)
-        Toshi.db[:unconfirmed_raw_transactions].truncate
+        Toshi.db.transaction do
+          Toshi.db[:unconfirmed_addresses_outputs].truncate
+          Toshi.db[:unconfirmed_ledger_entries].truncate
+          Toshi.db[:unconfirmed_addresses].truncate(:cascade => true)
+          Toshi.db[:unconfirmed_outputs].truncate(:cascade => true)
+          Toshi.db[:unconfirmed_inputs].truncate(:cascade => true)
+          Toshi.db[:unconfirmed_transactions].truncate(:cascade => true)
+          Toshi.db[:unconfirmed_raw_transactions].truncate
+          Toshi.db.run('reindex table unconfirmed_addresses_outputs')
+          Toshi.db.run('reindex table unconfirmed_ledger_entries')
+          Toshi.db.run('reindex table unconfirmed_addresses')
+          Toshi.db.run('reindex table unconfirmed_outputs')
+          Toshi.db.run('reindex table unconfirmed_inputs')
+          Toshi.db.run('reindex table unconfirmed_transactions')
+          Toshi.db.run('reindex table unconfirmed_raw_transactions')
+        end
       end
 
       def to_json(options={})

@@ -1203,5 +1203,61 @@ describe Toshi::Processor do
       expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_outputs.sum(:amount)).to eq(30 * 10**8)
       expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.spent_outputs.sum(:amount)).to eq(40 * 10**8)
     end
+
+    # while this handling is not completely desirable we should test that
+    # it behaves as expected. see: https://github.com/coinbase/toshi/issues/7
+    it 'verifies expected handling of non-p2sh multisig' do
+      processor = Toshi::Processor.new
+      blockchain = Blockchain.new
+
+      blockchain.load_from_json("simple_chain_1.json")
+      last_height, last_block = 0, nil
+      blockchain.chain['main'].each{|height, block|
+        processor.process_block(block, raise_errors=true)
+        last_height, last_block = height.to_i, block
+      }
+
+      prev_tx = blockchain.chain['main']['7'].tx[1]
+
+      key_A = blockchain.new_key('A')
+      key_B = blockchain.new_key('B')
+      pk_script = Bitcoin::Script.to_multisig_script(2, key_A.pub, key_B.pub)
+
+      tx = build_nonstandard_tx(blockchain, [prev_tx], [0], Toshi::CURRENT_TX_VERSION, lock_time=nil, pk_script)
+
+      # build another block with the new tx
+      time = last_block.time+=Bitcoin.network[:next_block_time_target]
+      new_block = blockchain.build_next_block(last_block, last_height+1, [tx], time)
+      processor.process_block(new_block, raise_errors=true)
+
+      # verify expected balances
+      address = Bitcoin::Script.new(prev_tx.outputs[0].script).get_address
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(0)
+      address = blockchain.address_from_label('A')
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(COINBASE_REWARD/2)
+      address = blockchain.address_from_label('B')
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(COINBASE_REWARD/2)
+
+      key_C = blockchain.new_key('C')
+      pk_script = Bitcoin::Script.to_multisig_script(2, key_A.pub, key_C.pub)
+
+      tx = build_nonstandard_tx(blockchain, [prev_tx], [1], Toshi::CURRENT_TX_VERSION, lock_time=nil, pk_script)
+
+      # build another block with the new tx
+      time = last_block.time+=Bitcoin.network[:next_block_time_target]
+      last_block = Toshi::Models::RawBlock.last.bitcoin_block
+      new_block = blockchain.build_next_block(last_block, last_height+2, [tx], time)
+      processor.process_block(new_block, raise_errors=true)
+
+      # verify expected balances
+      address = Bitcoin::Script.new(prev_tx.outputs[1].script).get_address
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(0)
+      address = blockchain.address_from_label('A')
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(COINBASE_REWARD)
+      address = blockchain.address_from_label('B')
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(COINBASE_REWARD/2)
+      address = blockchain.address_from_label('C')
+      expect(Toshi::Models::Address.where(address: address).first.balance).to eq(COINBASE_REWARD/2)
+    end
   end
 end
