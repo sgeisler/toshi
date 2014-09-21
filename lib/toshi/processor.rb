@@ -1507,8 +1507,6 @@ module Toshi
       expected_target = Bitcoin.decode_compact_bits(block.bits).to_i(16)
       max_target = Bitcoin.decode_compact_bits(Bitcoin.network[:proof_of_work_limit]).to_i(16)
 
-      log_raw_block_events(block.hash, "check_proof_of_work: expected #{expected_target} actual #{actual} max #{max_target}")
-
       # Check the range.
       if expected_target <= 0 || expected_target > max_target
         return false
