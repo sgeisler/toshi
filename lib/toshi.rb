@@ -14,6 +14,13 @@ module Toshi
   # satoshis per kb, main.cpp: CFeeRate CTransaction::minRelayTxFee = CFeeRate(1000);
   MIN_RELAY_TX_FEE = 1000
 
+  # postgresql advisory lock ids
+  module Lock
+    MEMPOOL             = 1
+    PROCESS_TRANSACTION = 2
+    PROCESS_BLOCK       = 3
+  end
+
   autoload :BlockHeaderIndex,   'toshi/block_header_index'
   autoload :BlockchainStorage,  'toshi/blockchain_storage'
   autoload :Bootstrap,          'toshi/bootstrap'

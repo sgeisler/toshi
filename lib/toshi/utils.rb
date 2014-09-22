@@ -82,6 +82,15 @@ module Toshi
       options[:limit] ||= 100
       options[:limit] = [ [ options[:limit].to_i, 0 ].max, 1000 ].min
     end
+
+    def synchronized(lock_id, &block)
+      # See: http://practiceovertheory.com/blog/2013/07/06/distributed-locking-in-postgres/
+      # See also: http://www.postgresql.org/docs/9.1/static/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
+      Toshi.db.run("select pg_advisory_lock(#{lock_id})")
+      block.call
+    ensure
+      Toshi.db.run("select pg_advisory_unlock(#{lock_id})")
+    end
   end
 
   def self.db_stats

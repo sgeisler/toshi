@@ -158,7 +158,6 @@ module Toshi
     def save_block_on_main_branch(block, height, prev_work = 0)
       @block_index.insert_block(block, height, prev_work)
       !!Toshi::Models::Block.create_from_block(block, height, Toshi::Models::Block::MAIN_BRANCH, @output_cache, prev_work)
-      @output_cache.flush
     end
 
     def save_block_on_side_branch(block, height, prev_work = 0)
@@ -318,7 +317,7 @@ module Toshi
                                      where outputs.id in #{sql_values} and
                                            addresses_outputs.output_id = outputs.id
                                      group by addresses_outputs.address_id) o
-                         where addresses.id = o.addr_id"
+                        where addresses.id = o.addr_id"
         Toshi.db.run(query)
         # Subtract from cache of total_sent if it was spent
         query = "update addresses
@@ -330,7 +329,7 @@ module Toshi
                                            outputs.spent = true and
                                            addresses_outputs.output_id = outputs.id
                                      group by addresses_outputs.address_id) o
-                         where addresses.id = o.addr_id"
+                        where addresses.id = o.addr_id"
         Toshi.db.run(query)
       end
     end
