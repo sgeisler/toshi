@@ -1,7 +1,8 @@
 # Toshi
 
-[![Build Status](https://travis-ci.org/coinbase/toshi.svg?branch=master)](https://travis-ci.org/coinbase/toshi)
-[![Inline docs](http://inch-ci.org/github/coinbase/toshi.svg?branch=master)](http://inch-ci.org/github/coinbase/toshi)
+[![Build Status](https://img.shields.io/travis/coinbase/toshi/master.svg?style=flat)](https://travis-ci.org/coinbase/toshi)
+[![Code Climate](https://img.shields.io/codeclimate/github/coinbase/toshi.svg?style=flat)](https://codeclimate.com/github/coinbase/toshi)
+[![Inline Docs](http://inch-ci.org/github/coinbase/toshi.svg?branch=master)](http://inch-ci.org/github/coinbase/toshi)
 
 Toshi is a complete implementation of the Bitcoin protocol, written in Ruby and backed by PostgreSQL. It provides a RESTful API that is ideal for building scalable web applications or analyzing blockchain data.
 
