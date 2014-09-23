@@ -21,6 +21,7 @@ You can see Toshi running on various networks at the following URLs:
 
 * https://bitcoin.toshi.io/
 * https://testnet3.toshi.io/
+* https://litecoin.toshi.io/
 
 ## Features
 
