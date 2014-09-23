@@ -1323,6 +1323,10 @@ module Toshi
     # E.g. verify_block_version_super_majority(2, block, 750, 1000) returns true if >= 750
     # blocks out of last 1000 are of version 2 or greater.
     def verify_block_version_super_majority(min_version, block_header, min_blocks, max_blocks)
+      # Litecoin: temporarily disable v2 block lockin until we are ready for v2 transition
+      # https://github.com/litecoin-project/litecoin/commit/5a1f5c332bcf044f79558434ea577dab532912d5
+      return false if Bitcoin.network_name == :litecoin
+
       found = 0
       i = 0
       while i < max_blocks && found < min_blocks && block_header

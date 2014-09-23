@@ -2,7 +2,7 @@ source 'https://rubygems.org'
 
 gem 'rake'
 gem 'foreman'
-gem 'bitcoin-ruby', github: 'lian/bitcoin-ruby', require: 'bitcoin'
+gem 'bitcoin-ruby', github: 'coblee/bitcoin-ruby', require: 'bitcoin'
 gem 'ffi'
 gem 'eventmachine'
 gem 'pg'
