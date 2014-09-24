@@ -4,12 +4,6 @@ module Toshi
 
       many_to_many :addresses
 
-      def first_address
-        address = addresses.first
-        return nil unless address
-        address.address
-      end
-
       def spending_transactions
         tids = Input.where(prev_out: hsh, index: position).map(:hsh)
         Transaction.where(hsh: tids)

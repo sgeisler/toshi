@@ -2,7 +2,7 @@ module Toshi
   class Processor
     include Logging
 
-    # Instance of BlockchainStorage that provides abstract API to store and retrieve blocks and transactions.
+    # Instance of BlockchainStorage that provides an API to store and retrieve blocks and transactions.
     attr_accessor :storage
 
     # For testing purposes: if true, skips checking actual proof of work in accept_block().
@@ -82,49 +82,52 @@ module Toshi
 
     # This is the entry point to accepting unconfirmed transactions.
     def process_transaction(tx, raise_errors=false)
-      @output_cache.flush
-      accepted, missing_inputs_exception = false, nil
+      accepted = false
+      Toshi::Utils.synchronized(Toshi::Lock::PROCESS_TRANSACTION) do
+        @output_cache.flush
+        missing_inputs_exception = nil
 
-      @storage.transaction({auto_savepoint: true}) do
-        begin
-          accepted = self.accept_to_memory_pool(tx, false, raise_errors)
-        rescue TxMissingInputsError => missing_inputs_exception
-          # we don't want these to cause us to abort the db transaction
-          @mempool.add_orphan_tx(tx)
+        @storage.transaction({auto_savepoint: true}) do
+          begin
+            accepted = self.accept_to_memory_pool(tx, false, raise_errors)
+          rescue TxMissingInputsError => missing_inputs_exception
+            # we don't want these to cause us to abort the db transaction
+            @mempool.add_orphan_tx(tx)
+          end
         end
-      end
 
-      if accepted
-        # Recursively process any orphan transactions that depended on this one
-        relay_transaction_to_peers(tx)
-        work_queue = [ tx.hash ]
-        i = 0
-        while i < work_queue.length do
-          @mempool.get_orphan_txs_by_prev_hash(work_queue[i]).each do |orphan_tx|
-            orphan_accepted = false
-            @storage.transaction do
-              begin
-                orphan_accepted = self.accept_to_memory_pool(orphan_tx, false, false)
-              rescue TxMissingInputsError
-                # don't care about orphans still being orphans.
-              rescue ValidationError => ex
-                logger.warn{ "orphan tx #{orphan_tx.hash} failed validation: #{ex.message}" }
-                @storage.remove_orphan_tx(orphan_tx.hash)
-              end
-              if orphan_accepted
-                # orphan is no longer an orphan, see if it's a parent
-                work_queue << orphan_tx.hash
-                relay_transaction_to_peers(orphan_tx)
+        if accepted
+          # Recursively process any orphan transactions that depended on this one
+          relay_transaction_to_peers(tx)
+          work_queue = [ tx.hash ]
+          i = 0
+          while i < work_queue.length do
+            @mempool.get_orphan_txs_by_prev_hash(work_queue[i]).each do |orphan_tx|
+              orphan_accepted = false
+              @storage.transaction do
+                begin
+                  orphan_accepted = self.accept_to_memory_pool(orphan_tx, false, false)
+                rescue TxMissingInputsError
+                  # don't care about orphans still being orphans.
+                rescue ValidationError => ex
+                  logger.warn{ "orphan tx #{orphan_tx.hash} failed validation: #{ex.message}" }
+                  @storage.remove_orphan_tx(orphan_tx.hash)
+                end
+                if orphan_accepted
+                  # orphan is no longer an orphan, see if it's a parent
+                  work_queue << orphan_tx.hash
+                  relay_transaction_to_peers(orphan_tx)
+                end
               end
             end
+            i += 1
           end
-          i += 1
         end
-      end
 
-      @output_cache.flush
-      raise missing_inputs_exception if missing_inputs_exception && raise_errors
+        @output_cache.flush
+        raise missing_inputs_exception if missing_inputs_exception && raise_errors
 
+      end # synchronized
       return accepted
     rescue ValidationError, TxValidationError => e
       raise if raise_errors
@@ -176,6 +179,9 @@ module Toshi
           return false
         end
       end
+
+      # Lock access to the memory pool for the remainder of the db transaction.
+      @mempool.lock
 
       # Is it already in the memory pool?
       if @mempool.exists?(tx.binary_hash)
@@ -246,7 +252,6 @@ module Toshi
       @mempool.add_unchecked(tx, on_disconnect)
 
       return true
-
     rescue TxValidationError => ex
       logger.warn{ "tx rejected: #{ex.message}" } if !raise_errors
       raise if raise_errors
@@ -261,44 +266,47 @@ module Toshi
     # Uses accept_block as the next step in validation process.
     # See ProcessBlock() in bitcoind.
     def process_block(block, raise_errors=false, current_time=nil)
-      @output_cache.flush
-      @storage.current_block = nil
       result = false
-      accepted_parents = []
-      begin
-        # Wrap validation process in a atomic and isolated transaction.
-        # This is required so we can disconnect and connect blocks and safely fail validating them in the middle.
-        @storage.transaction do
-          Toshi.db.after_rollback {
-            logger.debug {"db txn rolled back for block: #{block.hash}"}
-            @output_cache.flush
-            @storage.remove_block_header(block)
-          }
-          result = process_block_internal(block, raise_errors, current_time)
-          if result && @storage.is_block_valid?(block.hash)
-            # this block is a valid parent
-            accepted_parents = [ block.hash ]
-          end
-          if !result
-            logger.debug {"process_block_internal false for block: #{block.hash}"}
-            raise Sequel::Rollback
-          end
-        end
-      rescue ValidationError
+      Toshi::Utils.synchronized(Toshi::Lock::PROCESS_BLOCK) do
+        @output_cache.flush
         @storage.current_block = nil
-        raise if raise_errors
-        return result
-      end
-
-      # consume the array of parents from beginning to the end.
-      while accepted_parent_hash = accepted_parents.shift
-        # Try to accept the orphan and remove it from the database.
-        @storage.orphan_blocks_with_parent(accepted_parent_hash).each do |orphan|
-          accepted_parents += accept_orphan(orphan)
+        accepted_parents = []
+        begin
+          # Wrap validation process in a atomic and isolated transaction.
+          # This is required so we can disconnect and connect blocks and safely fail validating them in the middle.
+          @storage.transaction do
+            Toshi.db.after_rollback {
+              logger.debug {"db txn rolled back for block: #{block.hash}"}
+              @output_cache.flush
+              @storage.remove_block_header(block)
+            }
+            result = process_block_internal(block, raise_errors, current_time)
+            if result && @storage.is_block_valid?(block.hash)
+              # this block is a valid parent
+              accepted_parents = [ block.hash ]
+            end
+            if !result
+              logger.debug {"process_block_internal false for block: #{block.hash}"}
+              raise Sequel::Rollback
+            end
+          end
+        rescue ValidationError
+          @storage.current_block = nil
+          raise if raise_errors
+          return result
         end
-      end # end checking orphans recursively.
 
-      @storage.current_block = nil
+        # consume the array of parents from beginning to the end.
+        while accepted_parent_hash = accepted_parents.shift
+          # Try to accept the orphan and remove it from the database.
+          @storage.orphan_blocks_with_parent(accepted_parent_hash).each do |orphan|
+            accepted_parents += accept_orphan(orphan)
+          end
+        end # end checking orphans recursively.
+
+        @storage.current_block = nil
+
+      end # synchronized
       result
     end
 
@@ -926,12 +934,6 @@ module Toshi
 
       end # each tx in block
 
-      # Optimized method for marking outputs in the database in bulk
-      @storage.update_outputs_on_connect_block(block)
-
-      # mempool.removeForBlock() normally done in ConnectTip()
-      @mempool.remove_for_block(block)
-
       # Verify that coinbase pays no more than fees + block reward.
       coinbase_out_value = tx_value_out(block.tx[0])
       max_value = Bitcoin.block_creation_reward(height) + fees
@@ -945,6 +947,24 @@ module Toshi
 
       # Save the block on "main branch"
       self.persist_block_on_main_branch(block, height, @storage.total_work_up_to_block_hash(block.prev_block_hex))
+
+      # update outputs and remove txs last as they'll lock the affected rows
+      # and block queries for the transaction processor. concurrency is hard.
+
+      # This lock protects previous outputs as well.
+      # We should take care to make this scope as tight as possible to not
+      # unnecessarily block the transaction processor. It is released automatically
+      # after the wrapping db transaciton completes
+      @mempool.lock
+
+      # Optimized method for marking existing outputs in the database in bulk
+      @storage.update_outputs_on_connect_block(block)
+
+      # mempool.removeForBlock() normally done in ConnectTip()
+      @mempool.remove_for_block(block)
+
+      # Flush this now
+      @output_cache.flush
 
       return true
     end

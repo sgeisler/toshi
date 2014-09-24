@@ -258,14 +258,6 @@ module Toshi
         Toshi.db[:blocks_transactions].multi_insert(tx_associations)
 
         [b, "Created block #{b.hsh} with height #{b.height} on branch #{b.branch} with #{b.transactions.count} transactions"]
-
-        if branch == MAIN_BRANCH
-          # remove these last as they'll lock the affected rows and block
-          # queries for the transaction processor. concurrency is hard.
-          # TODO: should probably transfer timestamps and other information
-          Toshi::Models::UnconfirmedTransaction.remove_for_block(all_tx_hashes)
-          Toshi::Models::UnconfirmedRawTransaction.where(hsh: all_tx_hashes).delete
-        end
       end
 
       def to_hash(options = {})
@@ -305,7 +297,7 @@ module Toshi
             txs = block.transactions_dataset.offset(options[:offset]).limit(options[:limit])
             hash[:transactions] = Transaction.to_hash_collection(txs, options)
           else
-            hash[:transaction_hashes] = block.transactions.map {|tx| tx.hsh }
+            hash[:transaction_hashes] = block.transactions_dataset.select_map(:hsh)
           end
 
           collection << hash

@@ -152,12 +152,23 @@ module Toshi
       # make sure the transactions are on the tip pool (if they previously existed.)
       Toshi::Models::Transaction.where(hsh: tx_hashes)
         .update(pool: Toshi::Models::Transaction::TIP_POOL)
+
+      # TODO: should probably transfer timestamps and other information
+      Toshi::Models::UnconfirmedTransaction.remove_for_block(tx_hashes)
+      Toshi::Models::UnconfirmedRawTransaction.where(hsh: tx_hashes).delete
     end
 
     # Create a TxOut given a TxIn.
     def output_for_outpoint(txin)
       unconfirmed_output = Toshi::Models::UnconfirmedOutput.prevout(txin)
       Bitcoin::Protocol::TxOut.new(unconfirmed_output.amount, unconfirmed_output.script) rescue nil
+    end
+
+    # Lock access to the memory pool for the remainder of the wrapping db transaction.
+    def lock
+      # Automatically released when the wrapping db transaction completes.
+      # The owning session/transaction can also safely call this many times w/o deadlocking.
+      Toshi.db.run("select pg_advisory_xact_lock(#{Toshi::Lock::MEMPOOL})")
     end
   end
 end

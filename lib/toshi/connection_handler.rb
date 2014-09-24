@@ -243,7 +243,7 @@ module Toshi
     end
 
     def user_agent
-      "/Toshi:#{Toshi::VERSION}"
+      "/Toshi:#{Toshi::VERSION}/"
     end
 
     def peer_addr

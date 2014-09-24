@@ -7,22 +7,23 @@ module Toshi
                    :right_key => :output_id,
                    :join_table => :unconfirmed_addresses_outputs
 
+      def total_received
+        @received ||= outputs.sum(:amount).to_i
+      end
+
+      def total_sent(address)
+        return @sent if @sent
+        @sent = spent_outputs.sum(:amount).to_i
+        if address
+          @sent += amount_confirmed_spent_by_unconfirmed(address)
+        end
+        @sent
+      end
+
       # unconfirmed balance
-      def balance
-        balance = 0
-        if a = Address.where(address: address).first
-          # confirmed balance
-          balance = a.balance
-          # subtract unconfirmed spends of confirmed outputs
-          balance -= amount_confirmed_spent_by_unconfirmed(a)
-        end
-
-        # add unconfirmed unspent outputs
-        if unconfirmed_unspent = unspent_outputs.sum(:amount).to_i
-          balance += unconfirmed_unspent
-        end
-
-        balance
+      def balance(address_model=nil)
+        address_model ||= Address.where(address: address).first
+        total_received - total_sent(address_model)
       end
 
       def amount_confirmed_spent_by_unconfirmed(address)

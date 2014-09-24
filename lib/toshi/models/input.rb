@@ -2,13 +2,6 @@ module Toshi
   module Models
     class Input < Sequel::Model
 
-      def first_address
-        @previous_output ||= Output.where(hsh: prev_out, position: index).first
-        address = @previous_output.addresses.first
-        return nil unless address
-        address.address
-      end
-
       def previous_output
         @previous_output ||= Output.where(hsh: prev_out, position: index).first
       end

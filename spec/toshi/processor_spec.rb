@@ -1129,7 +1129,7 @@ describe Toshi::Processor do
       # still no unspent output in mempool
       address = blockchain.address_from_label('A')
       expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_outputs.count).to eq(0)
-      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.balance).to eq(0)
+      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.balance).to eq(COINBASE_REWARD/2 * -1)
 
       # it's still unspent in the blockchain's view though
       expect(Toshi::Models::Address.where(address: address).first.unspent_outputs.count).to eq(1)
@@ -1186,7 +1186,7 @@ describe Toshi::Processor do
       expect(Toshi::Models::Address.where(address: address).first.balance).to eq(balances[:C] * 10**8)
 
       # final unconfirmed balances
-      balances = { A: 110, B: 60, C: 80 }
+      balances = { A: 10, B: -40, C: 30 }
       address = blockchain.address_from_label('A')
       expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.balance).to eq(balances[:A] * 10**8)
       address = blockchain.address_from_label('B')

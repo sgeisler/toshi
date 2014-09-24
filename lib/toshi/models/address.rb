@@ -34,8 +34,8 @@ module Toshi
 
       def transactions(offset=0, limit=100)
         tids = Toshi.db[:address_ledger_entries].where(address_id: id)
-                           .select(:transaction_id).group_by(:transaction_id)
-                           .order(Sequel.desc(:transaction_id)).offset(offset).limit(limit).map(:transaction_id)
+          .select(:transaction_id).group_by(:transaction_id)
+          .order(Sequel.desc(:transaction_id)).offset(offset).limit(limit).map(:transaction_id)
         return [] unless tids.any?
         Transaction.where(id: tids).order(Sequel.desc(:id))
       end
@@ -70,15 +70,10 @@ module Toshi
           hash[:received] = address.total_received
           hash[:sent] = address.total_sent
 
-          amount_unconfirmed_spent = 0
-          if unconfirmed_address = Toshi::Models::UnconfirmedAddress.where(address: address.address).first
-            amount_unconfirmed_spent = unconfirmed_address.amount_confirmed_spent_by_unconfirmed(address)
-          end
-
-          hash[:unconfirmed_received] = unconfirmed_address ? unconfirmed_address.outputs.sum(:amount).to_i : 0
-          hash[:unconfirmed_sent] = unconfirmed_address ? unconfirmed_address.spent_outputs.sum(:amount).to_i : 0
-          hash[:unconfirmed_sent] += amount_unconfirmed_spent
-          hash[:unconfirmed_balance] = unconfirmed_address ? unconfirmed_address.balance : address.balance
+          unconfirmed_address = Toshi::Models::UnconfirmedAddress.where(address: address.address).first
+          hash[:unconfirmed_received] = unconfirmed_address ? unconfirmed_address.total_received : 0
+          hash[:unconfirmed_sent] = unconfirmed_address ? unconfirmed_address.total_sent(address) : 0
+          hash[:unconfirmed_balance] = unconfirmed_address ? unconfirmed_address.balance(address) : 0
 
           if options[:show_txs]
             if unconfirmed_address
