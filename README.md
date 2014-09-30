@@ -27,7 +27,7 @@ You can see Toshi running on various networks at the following URLs:
 
  * Complete Bitcoin node implementation
  * Fully passes TheBlueMatt's [regression test suite](https://github.com/TheBlueMatt/test-scripts)
- * PostgeSQL backed (more convenient for web applications and research)
+ * PostgreSQL backed (more convenient for web applications and research)
  * JSON, Hex, and Binary API
  * Simple web [interface](https://bitcoin.toshi.io) to monitor node status
 
