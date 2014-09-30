@@ -258,6 +258,8 @@ module Toshi
         Toshi.db[:blocks_transactions].multi_insert(tx_associations)
 
         [b, "Created block #{b.hsh} with height #{b.height} on branch #{b.branch} with #{b.transactions.count} transactions"]
+
+        b
       end
 
       def to_hash(options = {})
