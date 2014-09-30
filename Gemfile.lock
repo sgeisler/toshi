@@ -1,8 +1,8 @@
 GIT
-  remote: git://github.com/coblee/bitcoin-ruby.git
-  revision: a03f66ba87912244c71b5da81c55abf456bfa09c
+  remote: git://github.com/lian/bitcoin-ruby.git
+  revision: d63d94ad9dfe73d8629237675e53d97e969df19e
   specs:
-    bitcoin-ruby (0.0.5)
+    bitcoin-ruby (0.0.6)
 
 GEM
   remote: https://rubygems.org/
