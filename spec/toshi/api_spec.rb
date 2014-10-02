@@ -375,4 +375,30 @@ describe Toshi::Web::Api, :type => :request do
       check_api(blockchain)
     end
   end
+
+  describe "checks unconfirmed transaction output" do
+    it 'verifies we properly handle hex and bin formats for unconfirmed transactions' do
+      processor = Toshi::Processor.new
+      blockchain = Blockchain.new
+
+      # process simple chain to give us a some confirmed outputs.
+      blockchain.load_from_json("simple_chain_1.json")
+      blockchain.chain['main'].each{|height, block|
+        processor.process_block(block, raise_errors=true)
+      }
+
+      prev_tx = blockchain.chain['main']['7'].tx[1]
+      key_A = blockchain.new_key('A')
+      new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_A)
+      processor.process_transaction(new_tx, raise_errors=true)
+
+      get "/transactions/#{new_tx.hash}.hex"
+      expect(last_response).to be_ok
+      expect(last_response.body).to eq(new_tx.payload.unpack("H*")[0])
+
+      get "/transactions/#{new_tx.hash}.bin"
+      expect(last_response).to be_ok
+      expect(last_response.body).to eq(new_tx.payload)
+    end
+  end
 end

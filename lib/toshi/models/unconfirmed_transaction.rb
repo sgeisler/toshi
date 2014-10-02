@@ -21,6 +21,10 @@ module Toshi
         Bitcoin::P::Tx.new(UnconfirmedRawTransaction.where(hsh: hsh).first.payload)
       end
 
+      def raw
+        Toshi::Models::UnconfirmedRawTransaction.where(hsh: hsh).first
+      end
+
       def inputs
         UnconfirmedInput.where(hsh: hsh).order(:position)
       end
