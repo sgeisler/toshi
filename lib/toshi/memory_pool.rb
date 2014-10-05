@@ -1,6 +1,7 @@
 module Toshi
   # This class functions similar to bitcoind's CTxMemPool and uses Sequel/PostgreSQL for storage.
   class MemoryPool
+    include Logging
 
     def initialize(output_cache)
       @output_cache = output_cache
@@ -132,6 +133,7 @@ module Toshi
         Toshi::Models::UnconfirmedInput.from_txin(txin).each{|input|
           next if input.hsh == tx.hash
           # remove it and any dependents
+          logger.warn{ "removing conflicted tx #{tx.hash}" }
           self.remove(input.transaction.bitcoin_tx)
         }
       }
