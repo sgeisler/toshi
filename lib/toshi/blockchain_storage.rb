@@ -7,7 +7,6 @@ module Toshi
     def initialize(output_cache)
       @output_cache = output_cache
       @block_index = Toshi::BlockHeaderIndex.new
-      @block_index.item_limit = 2016
       @block_index.storage = self
       self.current_block= nil
       load_genesis_block
@@ -88,14 +87,25 @@ module Toshi
     # Only if it is a valid block on main chain or side chain.
     # Orphan block is not returned.
     def valid_block_for_hash(hash)
-      if !Toshi::Models::Block.main_or_side_branch.where(hsh: hash).first
-        return nil
+      block, created_at = valid_block_for_hash_with_created_at(hash)
+      block
+    end
+
+    def valid_block_for_hash_with_created_at(hash)
+      block = Toshi::Models::Block.main_or_side_branch.where(hsh: hash).first
+      if !block
+        return [nil, nil]
       end
       stored_block = Toshi::Models::RawBlock.where(hsh: hash).first
       if !stored_block
-        return nil
+        return [nil, nil]
       end
-      Bitcoin::Protocol::Block.new(stored_block.payload)
+      [Bitcoin::Protocol::Block.new(stored_block.payload), block.created_at]
+    end
+
+    # activeChain.Contains()
+    def active_chain_contains_block(hash)
+      Toshi::Models::Block.main_branch.where(hsh: hash).any?
     end
 
     # Returns Bitcoin::Protocol::Block or nil.
@@ -134,6 +144,11 @@ module Toshi
       head ? head.hsh : nil
     end
 
+    # Returns a hash of the block at the tip of the chain with the most total work.
+    def mostwork_tip_hash
+      @block_index.find_most_work_chain
+    end
+
     # Returns total work accumulated up to a given block (inclusive)
     # Should use BlockHeaderIndex for efficiency
     def total_work_up_to_block_hash(hash)
@@ -156,13 +171,13 @@ module Toshi
     # FIXME: probably, it's not the best API yet, but it's compatible with the existing code
     # for now, so we'll keep it around for a while.
     def save_block_on_main_branch(block, height, prev_work = 0)
-      @block_index.insert_block(block, height, prev_work)
-      !!Toshi::Models::Block.create_from_block(block, height, Toshi::Models::Block::MAIN_BRANCH, @output_cache, prev_work)
+      model = Toshi::Models::Block.create_from_block(block, height, Toshi::Models::Block::MAIN_BRANCH, @output_cache, prev_work)
+      @block_index.insert_block(block, height, prev_work, model.created_at)
     end
 
     def save_block_on_side_branch(block, height, prev_work = 0)
-      @block_index.insert_block(block, height, prev_work)
-      !!Toshi::Models::Block.create_from_block(block, height, Toshi::Models::Block::SIDE_BRANCH, @output_cache, prev_work)
+      model = Toshi::Models::Block.create_from_block(block, height, Toshi::Models::Block::SIDE_BRANCH, @output_cache, prev_work)
+      @block_index.insert_block(block, height, prev_work, model.created_at)
       @output_cache.flush
     end
 
@@ -179,9 +194,9 @@ module Toshi
     # Returns height for block_header. Allows to make it efficient if block_header stores height.
     # By default calls height_for_block()
     def height_for_block_header(block_header)
-      bh = guard_block_index_access { @block_index.block_header_for_hash(block_header.hash) }
+      bh = guard_block_index_access { @block_index.block_header_for_hash(block_header.sha2_hash) }
       return bh.height if bh && bh.height
-      return height_for_block(block_header.hash)
+      return height_for_block(block_header.sha2_hash)
     end
 
     # Returns previous block header. Allows to make it efficient if block_header caches a reference to a previous block.
@@ -193,11 +208,11 @@ module Toshi
     end
 
     # Returns total work accumulated up to a given block (inclusive)
-    # By default calls total_work_up_to_block_hash(block_header.hash) (not very efficient)
+    # By default calls total_work_up_to_block_hash(block_header.sha2_hash) (not very efficient)
     def total_work_up_to_block_header(block_header)
       tw = block_header.total_work
       return tw if tw && tw > 0
-      return total_work_up_to_block_hash(block_header.hash)
+      return total_work_up_to_block_hash(block_header.sha2_hash)
     end
 
     # UTXO updates

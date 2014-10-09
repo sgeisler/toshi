@@ -1,3 +1,5 @@
+require 'set'
+
 module Toshi
 
   # Implements a structure similar to bitcoind's mapBlockIndex
@@ -13,20 +15,22 @@ module Toshi
     # Can be nil, in which case blocks are not loaded/inserted automatically.
     attr_accessor :storage
 
-    # Maximum number of blocks to be kept in memory.
-    # When another block is inserted, some random block is pruned.
-    # If 0, blocks are never pruned.
-    # Default is 0, all block headers are kept in memory.
-    attr_accessor :item_limit
-
     def initialize
       @storage = nil
-      @item_limit = 0
       @headers_by_hash = {}
       @headers_count = 0
+      @headers_limit = 2016
 
-      # FIXME: will we ever really need it?
-      @tips_hashes = [] # array of chain "tips" - one of the hashes is a tip of the main chain.
+      # Strange name but its bitcoind analog is setBlockIndexValid.
+      # From the reference implementation:
+      #
+      # "The set of all CBlockIndex entries with BLOCK_VALID_TRANSACTIONS or better that are at least
+      #  as good as our current tip. Entries may be failed, though."
+      #
+      # In our case it will never contain failures. Just main and side chain blocks. It will keep
+      # blocks with lesser work but they eventually get pruned. It's cleaner than the active pruning
+      # bitcoind performs. We aren't that hard-pressed for memory.
+      @set_block_index_valid = SortedSet.new
     end
 
     # returns a block header for hash or nil if it's not found.
@@ -35,23 +39,22 @@ module Toshi
       # return existing header or try to load one from storage if we have one.
       @headers_by_hash[hash] ||= begin
         if @storage
-          block = @storage.valid_block_for_hash(hash)
+          block, created_at = @storage.valid_block_for_hash_with_created_at(hash)
           if block
-
-            block_header = block_header_from_block(block)
+            block_header = block_header_from_block(block, created_at)
 
             # If we have a previous block, use its height and total_work.
             # Otherwise, load them from the DB.
-
-            if prev_block_header = @headers_by_hash[block_header.hash]
+            if prev_block_header = @headers_by_hash[block_header.sha2_hash]
               block_header.height = (prev_block_header.height + 1) if prev_block_header.height
               block_header.total_work = prev_block_header.total_work + block.block_work
             else
               block_header.height = @storage.height_for_block(block.hash)
               block_header.total_work = @storage.total_work_up_to_block_hash(block.hash)
             end
+
             @headers_count += 1
-            prune_blocks(block_header.hash)
+            prune_blocks
             block_header
           else
             nil
@@ -68,47 +71,38 @@ module Toshi
     # Inserts a block header based on block (if it's not there yet).
     # If previous block is not included in index, raises an exception.
     # Argument is an instance of Bitcoin::Protocol::Block
-    def insert_block(block, height = nil, prev_work = 0)
+    def insert_block(block, height, prev_work, created_at)
       if @headers_by_hash[block.hash]
         return
       end
-      block_header = block_header_from_block(block)
+      block_header = block_header_from_block(block, created_at)
       block_header.height = height if height
       block_header.total_work = prev_work + block.block_work
       @headers_by_hash[block.hash] = block_header
       @headers_count += 1
-      prune_blocks(block_header.hash)
+      @set_block_index_valid.add?(block_header)
+      prune_blocks
     end
 
     def remove_block(block)
+      block_header = @headers_by_hash[block.hash]
+      @set_block_index_valid.delete?(block_header) if block_header
       @headers_count -= 1 if @headers_by_hash.delete(block.hash)
     end
 
-    # Removes excessive blocks according to @item_limit
-    def prune_blocks(seed_hash = nil)
-
+    # Removes excessive blocks according to @headers_limit.
+    # It does so in least-work order.
+    def prune_blocks
       # Do nothing if limit is not set.
-      return if (@item_limit || 0) < 1
+      return if (@headers_limit || 0) < 1
 
-      while @headers_count > @item_limit
-        # Remove some random block and make sure to break references to it from all of its children.
-        # Do not use rand(), but use block hashes to determine an index to remove.
-        # This will greatly help with debugging.
-
-        # Since Ruby 1.9 has keys sorted by order of use, we will remove the oldest key first.
-        random_index = 0 # if seed_hash
-        #           # reverse hash (because its beginning in hex form is all-zero)
-        #           [seed_hash].pack("H*").reverse.unpack("V").first % @headers_count
-        #         else
-        #           # no seed hash - use shitty random number generator
-        #           rand(@headers_count)
-        #         end
-
-        # Find random object
-        if obj_hash = @headers_by_hash.keys[random_index]
+      while @headers_count > @headers_limit
+        # Index 0 should be the least-recently used key.
+        if obj_hash = @headers_by_hash.keys[0]
           obj = @headers_by_hash[obj_hash]
-
           if obj
+            @set_block_index_valid.delete?(obj)
+
             # Break references from its children:
             (obj.next_block_headers || []).each do |child|
               child.previous_block_header = nil
@@ -124,16 +118,22 @@ module Toshi
           # Remove item from the index
           @headers_by_hash.delete(obj_hash)
         end
-
       end
+    end
+
+    # Inspired by FindMostWorkChain().
+    def find_most_work_chain
+      block_header = @set_block_index_valid.first
+      return nil unless block_header
+      block_header.sha2_hash
     end
 
     private
 
-    def block_header_from_block(block)
+    def block_header_from_block(block, created_at)
       block_header = BlockHeader.new
       block_header.block_header_index = self # reference to its parent
-      block_header.hash            = block.hash
+      block_header.sha2_hash       = block.hash
       block_header.ver             = block.ver
       block_header.prev_block      = block.prev_block
       block_header.prev_block_hex  = block.prev_block_hex
@@ -141,6 +141,7 @@ module Toshi
       block_header.time            = block.time
       block_header.bits            = block.bits
       block_header.nonce           = block.nonce
+      block_header.created_at      = created_at
       block_header
     end
 
@@ -150,7 +151,7 @@ module Toshi
       attr_accessor :block_header_index
 
       # Hash of this block
-      attr_accessor :hash
+      attr_accessor :sha2_hash
 
       # Reference to the previous block header
       attr_accessor :previous_block_header
@@ -182,10 +183,47 @@ module Toshi
       # Extensions:
       attr_accessor :height
       attr_accessor :total_work # cumulative work
+      attr_accessor :created_at
 
       # compare headers by hash
       def ==(other)
-        self.hash == other.hash
+        self.sha2_hash == other.sha2_hash
+      end
+
+      def eql?(other)
+        self == other
+      end
+
+      # See: CBlockIndexWorkComparator
+      # Note that the logic is inverted since we want to iterate in most-work order
+      # and don't have reverse iterators like STL's set.
+      def <=>(other)
+        # compare total work
+        return 1 if self.total_work < other.total_work
+        return -1 if self.total_work > other.total_work
+
+        # in the event of a tie, who was first?
+        return 1 if self.created_at > other.created_at
+        return -1 if self.created_at < other.created_at
+
+        # same block
+        return 0
+      end
+
+      # Similar to the above but this can also handle new blocks.
+      # Logic is also not inverted.
+      def is_more_work?(other, new_hash, new_work)
+        total_new_work = self.total_work + new_work
+        return true if total_new_work > other.total_work
+        return false if total_new_work < other.total_work
+
+        block_header = @block_header_index.block_header_for_hash(new_hash)
+        # If the "new" block doesn't exist yet it's newer and therefore the loser.
+        return false unless block_header
+
+        return true if block_header.created_at < other.created_at
+        return false if block_header.created_at > other.created_at
+        false
       end
 
       def previous_block_header

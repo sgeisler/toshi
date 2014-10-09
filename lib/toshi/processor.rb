@@ -87,7 +87,7 @@ module Toshi
         @output_cache.flush
         missing_inputs_exception = nil
 
-        @storage.transaction({auto_savepoint: true}) do
+        @storage.transaction do
           begin
             accepted = self.accept_to_memory_pool(tx, false, raise_errors)
           rescue TxMissingInputsError => missing_inputs_exception
@@ -272,23 +272,13 @@ module Toshi
         @storage.current_block = nil
         accepted_parents = []
         begin
-          # Wrap validation process in a atomic and isolated transaction.
-          # This is required so we can disconnect and connect blocks and safely fail validating them in the middle.
-          @storage.transaction do
-            Toshi.db.after_rollback {
-              logger.debug {"db txn rolled back for block: #{block.hash}"}
-              @output_cache.flush
-              @storage.remove_block_header(block)
-            }
-            result = process_block_internal(block, raise_errors, current_time)
-            if result && @storage.is_block_valid?(block.hash)
-              # this block is a valid parent
-              accepted_parents = [ block.hash ]
-            end
-            if !result
-              logger.debug {"process_block_internal false for block: #{block.hash}"}
-              raise Sequel::Rollback
-            end
+          result = process_block_internal(block, raise_errors, current_time)
+          if result && @storage.is_block_valid?(block.hash)
+            # this block is a valid parent
+            accepted_parents = [ block.hash ]
+          end
+          if !result
+            logger.debug {"process_block_internal false for block: #{block.hash}"}
           end
         rescue ValidationError
           @storage.current_block = nil
@@ -415,23 +405,16 @@ module Toshi
     def accept_orphan orphan
       new_parent = []
       begin
-        @storage.transaction do
-          Toshi.db.after_rollback {
-            @output_cache.flush
-            @storage.remove_block_header(orphan)
-            logger.debug{"db txn rolled back for orphan #{orphan.hash}"}
-          }
-          # Use a dummy ValidationState so someone can't setup nodes to counter-DoS based on orphan resolution
-          # (that is, feeding people an invalid block based on LegitBlockX in order to get anyone relaying LegitBlockX banned)
-          dummy_state = ValidationState.new
-          log_raw_block_events(orphan.hash, "recursively processing orphan block")
-          if self.accept_block(orphan, dummy_state)
-            # Orphan is no longer an orphan and now becomes another parent to process.
-            new_parent << orphan.hash
-          else
-            # rollback invalid orphan db transaction
-            raise BlockValidationError, "accept_block failed for orphan block with unknown reason"
-          end
+        # Use a dummy ValidationState so someone can't setup nodes to counter-DoS based on orphan resolution
+        # (that is, feeding people an invalid block based on LegitBlockX in order to get anyone relaying LegitBlockX banned)
+        dummy_state = ValidationState.new
+        log_raw_block_events(orphan.hash, "recursively processing orphan block")
+        if self.accept_block(orphan, dummy_state)
+          # Orphan is no longer an orphan and now becomes another parent to process.
+          new_parent << orphan.hash
+        else
+          # rollback invalid orphan db transaction
+          raise BlockValidationError, "accept_block failed for orphan block with unknown reason"
         end
       rescue ValidationError, BlockValidationError, TxValidationError => e
         # Failed to accept_block because orphan is invalid. Move on with other orphans.
@@ -671,17 +654,43 @@ module Toshi
       measure_method(:accept_block, start_time)
       log_raw_block_events(block.hash, "accept_block processing time: #{(Time.now - start_time).to_f}")
 
-      result = self.add_block(block, state)
+      result = false
+      begin
+        result = self.add_block(block, state)
+      rescue ValidationError => ex
+        # We didn't completely succeed in connecting the best chain.
+        # We may have now partially disconnected the proper main chain.
+        # Perform the below to get us back into a correct state.
+        activate_best_chain(state)
+        # Re-raise.
+        raise ex
+      end
 
-      # Relay inventory: the IO worker will enforce that we don't send old blocks.
-      relay_block_to_peers(block) if result
+      if result
+        # Relay inventory: the peer manager will enforce that we don't send old blocks.
+        relay_block_to_peers(block)
+      end
 
       return result
     end
 
+    # Somewhat similar to ActivateBestChain() in bitcoind.
+    def activate_best_chain(state)
+      mostwork_tip_hash = @storage.mostwork_tip_hash
+      mainchain_tip_hash = @storage.mainchain_tip_hash
+      return unless mostwork_tip_hash
+
+      while mostwork_tip_hash != mainchain_tip_hash
+        block = @storage.valid_block_for_hash(mostwork_tip_hash)
+        self.add_block(block, state)
+        mostwork_tip_hash = @storage.mostwork_tip_hash
+        mainchain_tip_hash = @storage.mainchain_tip_hash
+      end
+    end
+
     # Saves block and figures out the current main chain.
     # For those blocks that get connected to the main chain, extra transaction verification is performed.
-    # Equivalent to AddToBlockIndex() in bitcoind.
+    # Vaguely similar to ActivateBestChainStep() in bitcoind.
     def add_block(block, state)
       start_time = Time.now
 
@@ -691,22 +700,15 @@ module Toshi
       mainchain_tip = @storage.block_header_for_hash(mainchain_tip_hash)
       thischain_tip = @storage.block_header_for_hash(thischain_tip_hash)
 
-      # Compare the total work of two chains: current mainchain and the new chain with the given block.
-      mainchain_work = @storage.total_work_up_to_block_header(mainchain_tip)
-      thischain_work = @storage.total_work_up_to_block_header(thischain_tip)
-      this_block_work = block.block_work # Bitcoin::Protocol::Block#block_work computes work from block.bits.
-
-      new_chain_work = (thischain_work + this_block_work)
-
       # If the new work does not exceed the main chain work, stash this block away in a "side branch".
       # No further validations will be performed.
-      if new_chain_work <= mainchain_work
-        # This can only possible on the sidechain, so we simply store the block without further validations.
+      if !thischain_tip.is_more_work?(mainchain_tip, block.hash, block.block_work)
+        # This can only be possible on the sidechain, so we simply store the block without further validations.
         # Outputs will be validated when/if this block will become a part of the mainchain (see below).
         @storage.load_output_cache(block.tx)
         return persist_block_on_side_branch(block,
                                             @storage.height_for_block_header(thischain_tip) + 1,
-                                            thischain_work)
+                                            @storage.total_work_up_to_block_header(thischain_tip))
       end
 
       # New work is greater. Find the common ancestor block to rebuild the chain from there.
@@ -724,19 +726,19 @@ module Toshi
                      @storage.height_for_block_header(thischain_ancestor) ].min
 
       while @storage.height_for_block_header(mainchain_ancestor) > min_height
-        block_hashes_to_disconnect << mainchain_ancestor.hash
+        block_hashes_to_disconnect << mainchain_ancestor.sha2_hash
         mainchain_ancestor = @storage.previous_block_header_for_block_header(mainchain_ancestor)
       end
 
       while @storage.height_for_block_header(thischain_ancestor) > min_height
-        block_hashes_to_connect << thischain_ancestor.hash
+        block_hashes_to_connect << thischain_ancestor.sha2_hash
         thischain_ancestor = @storage.previous_block_header_for_block_header(thischain_ancestor)
       end
 
       # 2. Scan both chains simultaneously until we get to the same common ancestor
       while !(thischain_ancestor == mainchain_ancestor)
-        block_hashes_to_disconnect << mainchain_ancestor.hash
-        block_hashes_to_connect    << thischain_ancestor.hash
+        block_hashes_to_disconnect << mainchain_ancestor.sha2_hash
+        block_hashes_to_connect    << thischain_ancestor.sha2_hash
         mainchain_ancestor = @storage.previous_block_header_for_block_header(mainchain_ancestor)
         thischain_ancestor = @storage.previous_block_header_for_block_header(thischain_ancestor)
       end
@@ -751,8 +753,11 @@ module Toshi
       block_hashes_to_disconnect.each do |hash|
         b = @storage.valid_block_for_hash(hash)
         @storage.load_output_cache(b.tx)
-        if !self.disconnect_block(b, state)
-          return false
+        # Wrap disconnect/connect in a DB transaction.
+        @storage.transaction do
+          if !self.disconnect_block(b, state)
+            return false
+          end
         end
       end
 
@@ -762,8 +767,20 @@ module Toshi
       block_hashes_to_connect.reverse.each do |hash|
         b = @storage.valid_block_for_hash(hash)
         @storage.load_output_cache(b.tx)
-        if !self.connect_block(b, state)
-          return false
+        # Wrap disconnect/connect in a DB transaction.
+        @storage.transaction do
+          begin
+            if !self.connect_block(b, state)
+              # This will likely never get hit as the above raises exceptions.
+              @storage.remove_block_header(block)
+              @output_cache.flush
+              return false
+            end
+          rescue ValidationError => ex
+            @storage.remove_block_header(b)
+            @output_cache.flush
+            raise ex
+          end
         end
       end
 
@@ -772,8 +789,20 @@ module Toshi
 
       # Connect this new block too.
       @storage.load_output_cache(block.tx)
-      if !self.connect_block(block, state)
-        return false
+      # Wrap disconnect/connect in a DB transaction.
+      @storage.transaction do
+        begin
+          if !self.connect_block(block, state)
+            # This will likely never get hit as the above raises exceptions.
+            @storage.remove_block_header(block)
+            @output_cache.flush
+            return false
+          end
+        rescue ValidationError => ex
+          @storage.remove_block_header(block)
+          @output_cache.flush
+          raise ex
+        end
       end
 
       return true
@@ -1000,11 +1029,6 @@ module Toshi
       return true
     end
 
-    # Well-known transactions for which we don't verify input scripts
-    # because the existing script runner in bitcoin-ruby could not process them correctly.
-    SKIP_TXS = [
-    ]
-
     # Returns true if all inputs are valid.
     # block - current block - used to figure out time, height etc.
     # tx - transaction
@@ -1030,7 +1054,6 @@ module Toshi
       # Perform inexpensive checks on all inputs.
       tx.inputs.each do |txin|
         txout = @storage.output_for_outpoint(txin.prev_out, txin.prev_out_index)
-        # TODO: This isn't the cleanest way to also look at the memory pool.
         if !txout && include_memory_pool
           txout = @mempool.output_for_outpoint(txin)
         end
@@ -1082,13 +1105,11 @@ module Toshi
       # still computed and checked, and any change will be caught at the next checkpoint.
       # This flag is set earlier, in connect_block method.
       #
-      # # If it's a well-known transaction, skip script validation for it.
-      if check_scripts && !SKIP_TXS.include?(tx.hash)
+      if check_scripts
         # For each input, execute the script.
         tx.inputs.each_with_index do |txin, i|
           if !txin.coinbase?
             txout = @storage.output_for_outpoint(txin.prev_out, txin.prev_out_index)
-            # TODO: This isn't the cleanest way to also look at the memory pool.
             if !txout && include_memory_pool
               txout = @mempool.output_for_outpoint(txin)
             end
@@ -1588,38 +1609,42 @@ module Toshi
     # Saves the block as a part of the main chain.
     def persist_block_on_main_branch(block, height, prev_work=0)
       start_time = Time.now
-      #puts "Saving block on main chain: #{height}:#{block.hash} previous work: #{prev_work}"
-      result = @storage.save_block_on_main_branch(block, height, prev_work)
+      result = false
+      @storage.transaction(auto_savepoint: true) do
+        result = @storage.save_block_on_main_branch(block, height, prev_work)
+      end
       measure_method(:persist_block_on_main_chain, start_time)
       msg = "persist_block processing time: #{(Time.now - start_time).to_f}"
       log_raw_block_events(block.hash, msg)
       msg = "process_block total time: #{(Time.now - @processing_start_time).to_f}"
       log_raw_block_events(block.hash, msg)
-
       result
     end
 
     # Saves the block as a part of some side chain.
     def persist_block_on_side_branch(block, height, prev_work=0)
       start_time = Time.now
-      result = @storage.save_block_on_side_branch(block, height, prev_work)
+      result = false
+      @storage.transaction(auto_savepoint: true) do
+        result = @storage.save_block_on_side_branch(block, height, prev_work)
+      end
       msg = "persist_block processing time: #{(Time.now - start_time).to_f}"
       log_raw_block_events(block.hash, msg)
       msg = "process_block total time: #{(Time.now - @processing_start_time).to_f}"
       log_raw_block_events(block.hash, msg)
-
       result
     end
 
     def persist_orphan_block(block, height)
       start_time = Time.now
-      result = @storage.save_orphan_block(block, height)
-
+      result = false
+      @storage.transaction do
+        result = @storage.save_orphan_block(block, height)
+      end
       msg = "persist_block processing time: #{(Time.now - start_time).to_f}"
       log_raw_block_events(block.hash, msg)
       msg = "process_block total time: #{(Time.now - @processing_start_time).to_f}"
       log_raw_block_events(block.hash, msg)
-
       result
     end
 

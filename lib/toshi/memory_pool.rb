@@ -133,7 +133,7 @@ module Toshi
         Toshi::Models::UnconfirmedInput.from_txin(txin).each{|input|
           next if input.hsh == tx.hash
           # remove it and any dependents
-          logger.warn{ "removing conflicted tx #{tx.hash}" }
+          logger.warn{ "removing conflicted tx: #{input.hsh}, other: #{tx.hash}" }
           self.remove(input.transaction.bitcoin_tx)
         }
       }

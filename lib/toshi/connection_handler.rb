@@ -106,7 +106,7 @@ module Toshi
         b = Toshi::Models::Block.main_branch.where(prev_block: b.hsh).first
       end
       pkt = Bitcoin::Protocol.headers_pkt(@version.version, blocks)
-      log "<< headers #{blocks.size} blocks sent"
+      log "<< headers #{blocks.size} blocks sent, last: #{blocks.last.hash rescue ''}"
       send_data(pkt)
     end
 

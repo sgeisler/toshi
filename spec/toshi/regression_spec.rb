@@ -43,7 +43,7 @@ describe 'TheBlueMatt BitcoindComparisonTool', type: :regression do
 
   it "should complete successfully" do
     begin
-      Timeout::timeout(240) do
+      Timeout::timeout(480) do
         cmd = "java -Xms64m -Xmx512m -jar spec/regtest/test-scripts/BitcoindComparisonTool_jar/BitcoindComparisonTool.jar 1>>log/regtest.log 2>>log/regtest.log"
         _, _, _, regtest_thr = Open3.popen3(ENV, cmd)
         @pids << regtest_thr.pid
