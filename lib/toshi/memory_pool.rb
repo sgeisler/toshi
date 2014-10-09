@@ -108,19 +108,28 @@ module Toshi
     # the tip pool via remove_for_block.
     #
     def remove(tx)
-      tx.outputs.each_with_index{|txout,i|
-        # recursively remove conflicts
-        Toshi::Models::UnconfirmedInput.where(prev_out: tx.hash, index: i).each{|input|
-          self.remove(input.transaction.bitcoin_tx)
+      # recursively find conflicts -- except don't actually use recursion.
+      # some conflicted unconfirmed spend chains can get fairly long.
+      conflicts = [ tx ]
+      i = 0
+      while i < conflicts.length do
+        tx = conflicts[i]
+        tx.outputs.each_with_index{|txout,i|
+          Toshi::Models::UnconfirmedInput.where(prev_out: tx.hash, index: i).each{|input|
+            conflicts << input.transaction.bitcoin_tx
+          }
         }
-      }
+        i += 1
+      end
 
-      # mark the original tx as conflicted
-      Toshi::Models::UnconfirmedTransaction.where(hsh: tx.hash)
+      tx_hashes = conflicts.map{|tx| tx.hash}
+
+      # mark the transactions conflicted
+      Toshi::Models::UnconfirmedTransaction.where(hsh: tx_hashes)
         .update(pool: Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL)
 
       # this might be a disconnected blockchain transaction
-      Toshi::Models::Transaction.where(hsh: tx.hash)
+      Toshi::Models::Transaction.where(hsh: tx_hashes)
         .update(pool: Toshi::Models::Transaction::CONFLICT_POOL)
     end
 
@@ -143,6 +152,9 @@ module Toshi
     def remove_for_block(block)
       tx_hashes = []
 
+      # TODO: it would be much better for performance if we could query all
+      # unconfirmed inputs in a single db lookup. we would block the tx processor
+      # for a much shorter amount of time when connecting a block.
       block.tx.each{|tx|
         tx_hashes << tx.hash
         # remove any now conflicted txs from the memory pool --
