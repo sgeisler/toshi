@@ -1,3 +1,5 @@
+require 'set'
+
 module Toshi
   # This class functions similar to bitcoind's CTxMemPool and uses Sequel/PostgreSQL for storage.
   class MemoryPool
@@ -111,14 +113,18 @@ module Toshi
       # recursively find conflicts -- except don't actually use recursion.
       # some conflicted unconfirmed spend chains can get fairly long.
       conflicts = [ tx ]
+      seen = Set.new
       i = 0
       while i < conflicts.length do
         tx = conflicts[i]
-        tx.outputs.each_with_index{|txout,i|
-          Toshi::Models::UnconfirmedInput.where(prev_out: tx.hash, index: i).each{|input|
-            conflicts << input.transaction.bitcoin_tx
+        unless seen.include?(tx.hash)
+          tx.outputs.each_with_index{|txout,i|
+            Toshi::Models::UnconfirmedInput.where(prev_out: tx.hash, index: i).each{|input|
+              conflicts << input.transaction.bitcoin_tx
+            }
           }
-        }
+          seen << tx.hash
+        end
         i += 1
       end
 
