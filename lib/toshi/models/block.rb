@@ -91,7 +91,7 @@ module Toshi
 
       def confirmations(max_height=nil)
         max_height = Block.max_height if !max_height
-        branch == MAIN_BRANCH ? (max_height - height) : 0
+        branch == MAIN_BRANCH ? (max_height - height + 1) : 0
       end
 
       # The latest block on the main branch, aka "chainActive.Tip()" in bitcoind.
