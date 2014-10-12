@@ -130,6 +130,7 @@ module Toshi
 
       get '/addresses/:address.?:format?' do
         address = Toshi::Models::Address.where(address: params[:address]).first
+        address = Toshi::Models::UnconfirmedAddress.where(address: params[:address]).first unless address
         raise NotFoundError unless address
 
         case format
@@ -142,6 +143,7 @@ module Toshi
 
       get '/addresses/:address/transactions.?:format?' do
         address = Toshi::Models::Address.where(address: params[:address]).first
+        address = Toshi::Models::UnconfirmedAddress.where(address: params[:address]).first unless address
         raise NotFoundError unless address
 
         case format
