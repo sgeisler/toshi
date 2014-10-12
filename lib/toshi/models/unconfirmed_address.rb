@@ -11,7 +11,7 @@ module Toshi
         @received ||= outputs.sum(:amount).to_i
       end
 
-      def total_sent(address)
+      def total_sent(address=nil)
         return @sent if @sent
         @sent = spent_outputs.sum(:amount).to_i
         if address
@@ -71,6 +71,40 @@ module Toshi
         UnconfirmedTransaction.where(id: tids).order(Sequel.desc(:id))
       end
 
+      def to_hash(options={})
+        self.class.to_hash_collection([self], options).first
+      end
+
+      def self.to_hash_collection(addresses, options={})
+        Toshi::Utils.sanitize_options(options)
+
+        collection = []
+
+        addresses.each{|address|
+          hash = {}
+          hash[:hash] = address.address
+          hash[:balance] = 0
+          hash[:received] = 0
+          hash[:sent] = 0
+
+          hash[:unconfirmed_received] = address.total_received
+          hash[:unconfirmed_sent] = address.total_sent
+          hash[:unconfirmed_balance] = address.balance
+
+          if options[:show_txs]
+            hash[:unconfirmed_transactions] = UnconfirmedTransaction.to_hash_collection(address.transactions)
+            hash[:transactions] = []
+          end
+
+          collection << hash
+        }
+
+        return collection
+      end
+
+      def to_json(options={})
+        to_hash(options).to_json
+      end
     end
   end
 end

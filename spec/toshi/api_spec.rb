@@ -401,4 +401,101 @@ describe Toshi::Web::Api, :type => :request do
       expect(last_response.body).to eq(new_tx.payload)
     end
   end
+
+  describe "checks unconfirmed address output" do
+    it 'verifies we return info on addresses only seen in unconfirmed transactions' do
+      processor = Toshi::Processor.new
+      blockchain = Blockchain.new
+
+      # process simple chain to give us a some confirmed outputs.
+      blockchain.load_from_json("simple_chain_1.json")
+      blockchain.chain['main'].each{|height, block|
+        processor.process_block(block, raise_errors=true)
+      }
+
+      prev_tx = blockchain.chain['main']['7'].tx[1]
+      key_A = blockchain.new_key('A')
+      new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_A)
+      processor.process_transaction(new_tx, raise_errors=true)
+
+      # GET /addresses/<address>
+      get "/addresses/#{blockchain.address_from_label('A')}"
+      expect(last_response).to be_ok
+      expect(json['hash']).to eq(blockchain.address_from_label('A'))
+      expect(json['balance']).to eq(0)
+      expect(json['received']).to eq(0)
+      expect(json['sent']).to eq(0)
+      expect(json['unconfirmed_received']).to eq((10**8) * 25)
+      expect(json['unconfirmed_sent']).to eq(0)
+      expect(json['unconfirmed_balance']).to eq((10**8) * 25)
+
+      # GET /addresses/<address>/transactions
+      get "/addresses/#{blockchain.address_from_label('A')}/transactions"
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json['hash']).to eq(blockchain.address_from_label('A'))
+      expect(json['balance']).to eq(0)
+      expect(json['received']).to eq(0)
+      expect(json['sent']).to eq(0)
+      expect(json['unconfirmed_received']).to eq((10**8) * 25)
+      expect(json['unconfirmed_sent']).to eq(0)
+      expect(json['unconfirmed_balance']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['hash']).to eq(new_tx.hash)
+      expect(json['unconfirmed_transactions'][0]['version']).to eq(new_tx.ver)
+      expect(json['unconfirmed_transactions'][0]['lock_time']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['size']).to eq(new_tx.payload.size)
+      script = Bitcoin::Script.new(prev_tx.outputs[0].pk_script)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['previous_transaction_hash']).to eq(prev_tx.hash)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['output_index']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['addresses'][0]).to eq(script.get_address)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['amount']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['amount']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['spent']).to eq(false)
+      script = Bitcoin::Script.new(new_tx.outputs[0].pk_script)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['script']).to eq(script.to_string)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['script_hex']).to eq(new_tx.outputs[0].pk_script.unpack("H*")[0])
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['script_type']).to eq(script.type.to_s)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['addresses'][0]).to eq(blockchain.address_from_label('A'))
+      expect(json['unconfirmed_transactions'][0]['amount']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['fees']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['confirmations']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['pool']).to eq('memory')
+
+      key_B = blockchain.new_key('B')
+      prev_tx = new_tx
+      new_tx = build_nonstandard_tx(blockchain, [new_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_B)
+      processor.process_transaction(new_tx, raise_errors=true)
+
+      # GET /addresses/<address>/transactions
+      get "/addresses/#{blockchain.address_from_label('A')}/transactions"
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json['hash']).to eq(blockchain.address_from_label('A'))
+      expect(json['balance']).to eq(0)
+      expect(json['received']).to eq(0)
+      expect(json['sent']).to eq(0)
+      expect(json['unconfirmed_received']).to eq((10**8) * 25)
+      expect(json['unconfirmed_sent']).to eq((10**8) * 25)
+      expect(json['unconfirmed_balance']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['hash']).to eq(new_tx.hash)
+      expect(json['unconfirmed_transactions'][0]['version']).to eq(new_tx.ver)
+      expect(json['unconfirmed_transactions'][0]['lock_time']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['size']).to eq(new_tx.payload.size)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['previous_transaction_hash']).to eq(prev_tx.hash)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['output_index']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['addresses'][0]).to eq(blockchain.address_from_label('A'))
+      expect(json['unconfirmed_transactions'][0]['inputs'][0]['amount']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['amount']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['spent']).to eq(false)
+      script = Bitcoin::Script.new(new_tx.outputs[0].pk_script)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['script']).to eq(script.to_string)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['script_hex']).to eq(new_tx.outputs[0].pk_script.unpack("H*")[0])
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['script_type']).to eq(script.type.to_s)
+      expect(json['unconfirmed_transactions'][0]['outputs'][0]['addresses'][0]).to eq(blockchain.address_from_label('B'))
+      expect(json['unconfirmed_transactions'][0]['amount']).to eq((10**8) * 25)
+      expect(json['unconfirmed_transactions'][0]['fees']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['confirmations']).to eq(0)
+      expect(json['unconfirmed_transactions'][0]['pool']).to eq('memory')
+    end
+  end
 end
