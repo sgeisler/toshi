@@ -139,35 +139,54 @@ module Toshi
         .update(pool: Toshi::Models::Transaction::CONFLICT_POOL)
     end
 
-    # Remove transactions which depend on inputs of tx
-    def remove_conflicts(tx)
-      tx.inputs.each{|txin|
-        next if txin.coinbase?
-        # look for any spending inputs not tied to this immediate tx --
-        # if we find one we should mark it a conflict.
-        Toshi::Models::UnconfirmedInput.from_txin(txin).each{|input|
-          next if input.hsh == tx.hash
-          # remove it and any dependents
-          logger.warn{ "removing conflicted tx: #{input.hsh}, other: #{tx.hash}" }
-          self.remove(input.transaction.bitcoin_tx)
+    # Helper method.
+    def remove_conflicts_step(query, in_block_set)
+      Toshi::Models::UnconfirmedInput.where(query).each{|input|
+        next if in_block_set.include?(input.hsh)
+        # remove it and any dependents
+        logger.warn{ "removing conflicted tx: #{input.hsh}" }
+        self.remove(input.transaction.bitcoin_tx)
+      }
+    end
+
+    # Remove transactions which depend on inputs of txs in the block.
+    def remove_conflicts(block, in_block_set)
+      query = ''
+      block.tx.each{|tx|
+        tx.inputs.each{|txin|
+          next if txin.coinbase?
+          if !query.empty?
+            if query.bytesize > (1024*512)
+              # Do these in reasonably sized steps.
+              self.remove_conflicts_step(query, in_block_set)
+              query = ''
+            else
+              query << ' OR '
+            end
+          end
+          # Find other spenders of the same previous outputs.
+          # TODO: Figure out how to use Sequel or named parameters.
+          query << '(prev_out = \''
+          query << txin.previous_output
+          query << '\' AND index = '
+          query << txin.prev_out_index.to_s
+          query << ')'
         }
       }
+      self.remove_conflicts_step(query, in_block_set) unless query.empty?
     end
 
     # Remove all txs in the block from the memory pool.
     def remove_for_block(block)
-      tx_hashes = []
+      in_block_set = Set.new
+      block.tx.each{|tx| in_block_set.add?(tx.hash) }
 
-      # TODO: it would be much better for performance if we could query all
-      # unconfirmed inputs in a single db lookup. we would block the tx processor
-      # for a much shorter amount of time when connecting a block.
-      block.tx.each{|tx|
-        tx_hashes << tx.hash
-        # remove any now conflicted txs from the memory pool --
-        # these are txs which spend outputs spent by txs in this new block. why would this happen?
-        # maybe a tx in the block wasn't relayed to us but an associated double-spend was.
-        self.remove_conflicts(tx)
-      }
+      # remove any now conflicted txs from the memory pool --
+      # these are txs which spend outputs spent by txs in this new block. why would this happen?
+      # maybe a tx in the block wasn't relayed to us but an associated double-spend was.
+      self.remove_conflicts(block, in_block_set)
+
+      tx_hashes = in_block_set.to_a
 
       # make sure the transactions are on the tip pool (if they previously existed.)
       Toshi::Models::Transaction.where(hsh: tx_hashes)

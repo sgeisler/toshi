@@ -558,6 +558,7 @@ module Toshi
 
     # Bulk load relevant outputs into cache.
     # This is ugly but effective.
+    # TODO: Figure out how to use Sequel or named parameters.
     def load_output_cache(txs)
       query = ''
       tx_seen = {}
@@ -569,7 +570,10 @@ module Toshi
           query = ''
         end
         # Fetch immediate outputs for this tx.
-        query += (query.empty? ? '' : ' OR ') + "(hsh = '#{tx.hash}')"
+        query << (query.empty? ? '' : ' OR ')
+        query << '(hsh = \''
+        query << tx.hash
+        query << '\')'
         tx_seen[tx.hash] = true
         tx.in.each{|txin|
           # Fetch all spent prev outs too.
@@ -579,9 +583,13 @@ module Toshi
             load_output_cache_from_query(query)
             query = ' '
           else
-            query += ' OR '
+            query << ' OR '
           end
-          query += "(hsh = '#{txin.previous_output}' AND position = #{txin.prev_out_index})"
+          query << '(hsh = \''
+          query << txin.previous_output
+          query << '\' AND position = '
+          query << txin.prev_out_index.to_s
+          query << ')'
         }
       }
       load_output_cache_from_query(query) if !query.empty?
