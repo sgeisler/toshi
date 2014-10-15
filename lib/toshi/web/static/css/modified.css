@@ -256,7 +256,50 @@ header .fork {
   font-weight: bold;
   color: rgba(255, 255, 255, 0.7);
 }
+/* ==========================================================================
+   GitHub link
+   ========================================================================== */
+.github_link {
+  position: absolute;
+  z-index: 1000;
+  right: 0;
+  top: 0;
+  width: 110px;
+  height: 110px;
+}
+.github_link > a {
+  position: absolute;
+  z-index: 1000;
+  right: -75px;
+  top: -75px;
+  width: 150px;
+  height: 150px;
+  background-color: white;
+  display: block;
 
+  -webkit-transform: rotate(45deg);
+  -moz-transform: rotate(45deg);
+  -o-transform: rotate(45deg);
+  -ms-transform: rotate(45deg);
+  transform: rotate(45deg);
+}
+.github_link > a h2 {
+  text-transform: uppercase;
+  text-align: center;
+  font-size: 14px;
+  position: absolute;
+  bottom: 0;
+  left: 44px;
+  color: #235A8A;
+}
+.github_link > a h2 span {
+  display: block;
+  text-transform: none;
+  font-size: 12px;
+}
+.github_link > a:hover h2 {
+  color: #4483BB;
+}
 /* ==========================================================================
   Section Style
   ========================================================================== */
