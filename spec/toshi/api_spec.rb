@@ -498,4 +498,67 @@ describe Toshi::Web::Api, :type => :request do
       expect(json['unconfirmed_transactions'][0]['pool']).to eq('memory')
     end
   end
+
+  describe "checks that users can post new transactions" do
+    it 'verifies basic post transactions behavior' do
+      processor = Toshi::Processor.new
+      blockchain = Blockchain.new
+
+      # process simple chain to give us a some confirmed outputs.
+      blockchain.load_from_json("simple_chain_1.json")
+      blockchain.chain['main'].each{|height, block|
+        processor.process_block(block, raise_errors=true)
+      }
+
+      prev_tx = blockchain.chain['main']['7'].tx[1]
+      key_A = blockchain.new_key('A')
+      new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_A)
+
+      # push the tx via the API
+      put "/transactions", :hex => new_tx.payload.unpack("H*").first
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json['hash']).to eq(new_tx.hash)
+
+      # look for it
+      get "/transactions/#{new_tx.hash}"
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json['hash']).to eq(new_tx.hash)
+      expect(json['version']).to eq(1)
+      expect(json['lock_time']).to eq(0)
+      expect(json['size']).to eq(new_tx.payload.bytesize)
+      expect(json['inputs'][0]['previous_transaction_hash']).to eq(prev_tx.hash)
+      expect(json['inputs'][0]['output_index']).to eq(0)
+      expect(json['inputs'][0]['amount']).to eq(2500000000)
+      expect(json['outputs'][0]['amount']).to eq(2500000000)
+      expect(json['outputs'][0]['spent']).to eq(false)
+      script = Bitcoin::Script.new(new_tx.outputs[0].pk_script)
+      expect(json['outputs'][0]['script']).to eq(script.to_string)
+      expect(json['outputs'][0]['script_hex']).to eq(new_tx.outputs[0].pk_script.unpack("H*")[0])
+      expect(json['outputs'][0]['script_type']).to eq('hash160')
+      expect(json['outputs'][0]['addresses'][0]).to eq(blockchain.address_from_label('A'))
+      expect(json['amount']).to eq(2500000000)
+      expect(json['fees']).to eq(0)
+      expect(json['confirmations']).to eq(0)
+      expect(json['pool']).to eq('memory')
+
+      # try pushing a double-spend
+      key_B = blockchain.new_key('B')
+      new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_B)
+      put "/transactions", :hex => new_tx.payload.unpack("H*").first
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json['error']).to eq('AcceptToMemoryPool() : already spent in the memory pool')
+
+      # try pushing a tx with missing inputs
+      key_C = blockchain.new_key('C')
+      prev_tx = new_tx
+      new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_C)
+      put "/transactions", :hex => new_tx.payload.unpack("H*").first
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json['error']).to eq('AcceptToMemoryPool() : transaction missing inputs')
+    end
+  end
 end

@@ -90,11 +90,19 @@ module Toshi
         rescue
           return { error: 'malformed transaction' }.to_json
         end
-        if Toshi::Models::RawTransaction.where(hsh: ptx.hash).first
+
+        if Toshi::Models::RawTransaction.where(hsh: ptx.hash).first ||
+            Toshi::Models::UnconfirmedRawTransaction.where(hsh: ptx.hash).first
           return { error: 'transaction already received' }.to_json
         end
-        Toshi::Models::RawTransaction.create(hsh: ptx.hash, payload: Sequel.blob(ptx.payload))
-        Toshi::Workers::TransactionWorker.perform_async ptx.hash, { 'sender' => nil }
+
+        begin
+          processor = Toshi::Processor.new
+          processor.process_transaction(ptx, raise_error=true)
+        rescue Toshi::Processor::ValidationError => ex
+          return { error: ex.message }.to_json
+        end
+
         { hash: ptx.hash }.to_json
       end
 
