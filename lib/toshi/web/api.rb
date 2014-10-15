@@ -84,7 +84,7 @@ module Toshi
       ####
 
       # submit new transaction to network
-      put '/transactions.?:format?' do
+      post '/transactions.?:format?' do
         begin
           ptx = Bitcoin::P::Tx.new([params[:hex]].pack("H*"))
         rescue
