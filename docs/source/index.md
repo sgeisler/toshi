@@ -317,7 +317,6 @@ This endpoint retrieves transaction information.
 ```shell
 curl https://bitcoin.toshi.io/api/v0/transactions \
     -d '{"hex": "0100000001ea..."}' \
-    -X PUT
 ```
 
 > The above command returns JSON structured like this:
