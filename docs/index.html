@@ -331,10 +331,9 @@
 
 <p>This endpoint retrieves transaction information.</p>
 <h3 id='http-request'>HTTP Request</h3>
-<p><code class="prettyprint">GET https://bitcoin.toshi.io/api/&lt;version&gt;/transactions/&lt;hash&gt;</code></p>
+<p><code class="prettyprint">POST https://bitcoin.toshi.io/api/&lt;version&gt;/transactions/&lt;hash&gt;</code></p>
 <h2 id='relay-transaction'>Relay transaction</h2><pre class="highlight shell">curl https://bitcoin.toshi.io/api/v0/transactions <span class="se">\</span>
     -d <span class="s1">'{"hex": "0100000001ea..."}'</span> <span class="se">\</span>
-    -X PUT
 </pre>
 
 <blockquote>
