@@ -310,7 +310,7 @@ This endpoint retrieves transaction information.
 
 ### HTTP Request
 
-`GET https://bitcoin.toshi.io/api/<version>/transactions/<hash>`
+`POST https://bitcoin.toshi.io/api/<version>/transactions/<hash>`
 
 ## Relay transaction
 
