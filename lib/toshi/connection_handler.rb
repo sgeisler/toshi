@@ -170,9 +170,9 @@ module Toshi
 
     def on_get_transaction(hash)
       log ">> get transaction: #{hash.hth}"
-      if tx = Toshi::Models::RawTransaction.where(hsh: hash.hth).first
-        send_data( Bitcoin::Protocol.pkt("tx", tx.payload) )
-      end
+      tx = Toshi::Models::UnconfirmedRawTransaction.where(hsh: hash.hth).first
+      tx = Toshi::Models::RawTransaction.where(hsh: hash.hth).first unless tx
+      send_data( Bitcoin::Protocol.pkt("tx", tx.payload) ) if tx
     end
 
     def on_get_block(hash)
