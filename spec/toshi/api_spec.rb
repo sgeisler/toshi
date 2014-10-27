@@ -515,7 +515,7 @@ describe Toshi::Web::Api, :type => :request do
       new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_A)
 
       # push the tx via the API
-      post "/transactions", :hex => new_tx.payload.unpack("H*").first
+      post "/transactions", {:hex => new_tx.payload.unpack("H*").first}.to_json
       expect(last_response).to be_ok
       json = JSON.parse(last_response.body)
       expect(json['hash']).to eq(new_tx.hash)
@@ -546,7 +546,7 @@ describe Toshi::Web::Api, :type => :request do
       # try pushing a double-spend
       key_B = blockchain.new_key('B')
       new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_B)
-      post "/transactions", :hex => new_tx.payload.unpack("H*").first
+      post "/transactions", {:hex => new_tx.payload.unpack("H*").first}.to_json
       expect(last_response).to be_ok
       json = JSON.parse(last_response.body)
       expect(json['error']).to eq('AcceptToMemoryPool() : already spent in the memory pool')
@@ -555,7 +555,7 @@ describe Toshi::Web::Api, :type => :request do
       key_C = blockchain.new_key('C')
       prev_tx = new_tx
       new_tx = build_nonstandard_tx(blockchain, [prev_tx], [0], ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, key_C)
-      post "/transactions", :hex => new_tx.payload.unpack("H*").first
+      post "/transactions", {:hex => new_tx.payload.unpack("H*").first}.to_json
       expect(last_response).to be_ok
       json = JSON.parse(last_response.body)
       expect(json['error']).to eq('AcceptToMemoryPool() : transaction missing inputs')
