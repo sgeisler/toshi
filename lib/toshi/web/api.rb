@@ -86,7 +86,8 @@ module Toshi
       # submit new transaction to network
       post '/transactions.?:format?' do
         begin
-          ptx = Bitcoin::P::Tx.new([params[:hex]].pack("H*"))
+          json = JSON.parse(request.body.read)
+          ptx = Bitcoin::P::Tx.new([json['hex']].pack("H*"))
         rescue
           return { error: 'malformed transaction' }.to_json
         end
