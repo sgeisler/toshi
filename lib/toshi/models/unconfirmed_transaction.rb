@@ -220,6 +220,13 @@ module Toshi
         return if Toshi.db[:unconfirmed_ledger_entries]
         .where(transaction_id: id).exclude(input_id: nil).any?
 
+        # update totals now
+        fields = tx.additional_fields
+        self.total_in_value = fields[:total_in_value]
+        self.total_out_value = fields[:total_out_value]
+        self.fee = fields[:fee]
+        self.save
+
         # gather these
         input_ids = self.inputs.select_map(:id)
 
