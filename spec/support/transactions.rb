@@ -4,7 +4,7 @@ def hex_to_bin(s)
   s.scan(/../).map { |x| x.hex }.pack('c*')
 end
 
-def build_nonstandard_tx(blockchain, prev_txs, prev_tx_output_indexes, ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, output_key=nil)
+def build_nonstandard_tx(blockchain, prev_txs, prev_tx_output_indexes, ver=Toshi::CURRENT_TX_VERSION, lock_time=nil, output_pk_script=nil, output_key=nil, fee=nil)
   new_tx = Bitcoin::Protocol::Tx.new
   new_tx.ver = ver
   is_p2sh_input = false
@@ -17,6 +17,7 @@ def build_nonstandard_tx(blockchain, prev_txs, prev_tx_output_indexes, ver=Toshi
     end
 
     value = prev_tx.outputs[prev_tx_output_indexes[i]].value
+    value -= fee if fee
 
     if !output_pk_script
       key = output_key ? output_key : blockchain.new_key

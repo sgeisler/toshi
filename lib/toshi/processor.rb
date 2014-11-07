@@ -113,11 +113,11 @@ module Toshi
                   logger.warn{ "orphan tx #{orphan_tx.hash} failed validation: #{ex.message}" }
                   @storage.remove_orphan_tx(orphan_tx.hash)
                 end
-                if orphan_accepted
-                  # orphan is no longer an orphan, see if it's a parent
-                  work_queue << orphan_tx.hash
-                  relay_transaction_to_peers(orphan_tx)
-                end
+              end
+              if orphan_accepted
+                # orphan is no longer an orphan, see if it's a parent
+                work_queue << orphan_tx.hash
+                relay_transaction_to_peers(orphan_tx)
               end
             end
             i += 1
