@@ -1,0 +1,30 @@
+postgres:
+  image: postgres:9.3
+  ports:
+    - "5432"
+redis:
+  image: redis:2.8
+  ports:
+    - "6379"
+web: &web
+  build: .
+  command: bundle exec puma
+  volumes:
+    - .:/usr/src/app
+  ports:
+    - "5000:5000"
+  links:
+    - postgres
+    - redis
+blockworker:
+  <<: *web
+  command: bundle exec sidekiq -q blocks -c 1 -r ./config/environment.rb
+  ports: []
+transactionworker:
+  <<: *web
+  command: bundle exec sidekiq -q transactions -c 1 -r ./config/environment.rb
+  ports: []
+peermanager:
+  <<: *web
+  command: bundle exec ruby bin/peer_manager.rb
+  ports: []
