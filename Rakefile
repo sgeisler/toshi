@@ -4,6 +4,38 @@ task :bundle do
   sh 'bundle install --path  .bundle'
 end
 
+namespace :fig do
+  def test_run
+    cmd = 'docker run '
+    cmd << '-e TOSHI_ENV=test '
+    cmd << '-it '
+    cmd << '--link toshi_redis_1:redis '
+    cmd << '--link toshi_postgres_1:postgres '
+    cmd << 'toshi_test'
+    cmd
+  end
+
+  task :create do
+    sh 'fig build'
+    sh 'fig start postgres'
+    sh 'fig run postgres dropdb -h postgres -U postgres toshi_development || true'
+    sh 'fig run postgres dropdb -h postgres -U postgres toshi_test || true'
+    sh 'fig run postgres createdb -h postgres -U postgres toshi_development'
+    sh 'fig run postgres createdb -h postgres -U postgres toshi_test'
+    sh 'fig run web rake db:migrate'
+    sh 'fig run -e TOSHI_ENV=test web rake db:migrate'
+  end
+
+  task :test do
+    sh 'cat spec/Dockerfile  | docker build -t toshi_test -'
+    sh test_run
+  end
+
+  task :ssh_test do
+    sh test_run + ' bash'
+  end
+end
+
 namespace :db do
   desc "Run database migrations"
   task :migrate, [:version] do |t, args|
