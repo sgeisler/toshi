@@ -1196,12 +1196,12 @@ describe Toshi::Processor do
 
       # test more unconfirmed address values
       address = blockchain.address_from_label('A')
-      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_outputs.sum(:amount)).to eq(10 * 10**8)
+      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_amount).to eq(10 * 10**8)
       address = blockchain.address_from_label('B')
-      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_outputs.sum(:amount)).to eq(10 * 10**8)
+      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_amount).to eq(10 * 10**8)
       address = blockchain.address_from_label('C')
-      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_outputs.sum(:amount)).to eq(30 * 10**8)
-      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.spent_outputs.sum(:amount)).to eq(40 * 10**8)
+      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.unspent_amount).to eq(30 * 10**8)
+      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.spent_amount).to eq(40 * 10**8)
     end
 
     # while this handling is not completely desirable we should test that
@@ -1295,8 +1295,7 @@ describe Toshi::Processor do
 
       # verify expected balances
       address = blockchain.address_from_label('A')
-      # XXX TODO: uncomment the below when https://github.com/coinbase/toshi/issues/132 is resolved.
-      #expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.balance).to eq(0)
+      expect(Toshi::Models::UnconfirmedAddress.where(address: address).first.balance).to eq(0)
       address = blockchain.address_from_label('B')
       expect(Toshi::Models::Address.where(address: address).first.balance).to eq(0)
       address = blockchain.address_from_label('C')
@@ -1314,6 +1313,15 @@ describe Toshi::Processor do
       # verify expected chainstate
       expect(Toshi::Models::Block.where(hsh: new_block.hash).first.branch).to eq(Toshi::Models::Block::SIDE_BRANCH)
       expect(Toshi::Models::Block.head.hsh).to eq(new_block3.hash)
+
+      # verify expected mempool state
+      expect(Toshi::Models::UnconfirmedTransaction.where(pool: Toshi::Models::UnconfirmedTransaction::MEMORY_POOL).count).to eq(2)
+      expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx2.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::MEMORY_POOL)
+      expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx3.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::MEMORY_POOL)
+
+      # verify the conflict
+      expect(Toshi::Models::UnconfirmedTransaction.where(pool: Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL).count).to eq(1)
+      expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL)
     end
   end
 end
