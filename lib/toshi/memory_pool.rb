@@ -36,9 +36,9 @@ module Toshi
     def any_inputs_spent?(tx)
       tx.inputs.each{|txin|
         hash, i = txin.previous_output, txin.prev_out_index
-        if input = Toshi::Models::UnconfirmedInput.where(prev_out: hash, index: i).first
+        Toshi::Models::UnconfirmedInput.where(prev_out: hash, index: i).each{|input|
           return true if input.transaction.in_memory_pool?
-        end
+        }
       }
       false
     end

@@ -1313,6 +1313,15 @@ describe Toshi::Processor do
       # verify expected chainstate
       expect(Toshi::Models::Block.where(hsh: new_block.hash).first.branch).to eq(Toshi::Models::Block::SIDE_BRANCH)
       expect(Toshi::Models::Block.head.hsh).to eq(new_block3.hash)
+
+      # verify expected mempool state
+      expect(Toshi::Models::UnconfirmedTransaction.where(pool: Toshi::Models::UnconfirmedTransaction::MEMORY_POOL).count).to eq(2)
+      expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx2.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::MEMORY_POOL)
+      expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx3.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::MEMORY_POOL)
+
+      # verify the conflict
+      expect(Toshi::Models::UnconfirmedTransaction.where(pool: Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL).count).to eq(1)
+      expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL)
     end
   end
 end
