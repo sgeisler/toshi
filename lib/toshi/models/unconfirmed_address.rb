@@ -8,12 +8,12 @@ module Toshi
                    :join_table => :unconfirmed_addresses_outputs
 
       def total_received
-        @received ||= outputs.sum(:amount).to_i
+        @received ||= received_amount
       end
 
       def total_sent(address=nil)
         return @sent if @sent
-        @sent = spent_outputs.sum(:amount).to_i
+        @sent = spent_amount
         if address
           @sent += amount_confirmed_spent_by_unconfirmed(address)
         end
@@ -40,16 +40,31 @@ module Toshi
         query[:total].to_i
       end
 
+      # filters outputs not in the memory pool
       def outputs
-        unconfirmed_outputs_dataset
+        UnconfirmedOutput.join(:unconfirmed_ledger_entries, :output_id => :id)
+          .where(address_id: id).join(:unconfirmed_transactions, :id => :transaction_id)
+          .where(pool: UnconfirmedTransaction::MEMORY_POOL)
       end
 
       def unspent_outputs
-        unconfirmed_outputs_dataset.where(spent: false)
+        outputs.where(spent: false)
       end
 
       def spent_outputs
-        unconfirmed_outputs_dataset.where(spent: true)
+        outputs.where(spent: true)
+      end
+
+      def unspent_amount
+        unspent_outputs.sum(:unconfirmed_outputs__amount).to_i
+      end
+
+      def spent_amount
+        spent_outputs.sum(:unconfirmed_outputs__amount).to_i
+      end
+
+      def received_amount
+        outputs.sum(:unconfirmed_outputs__amount).to_i
       end
 
       HASH160_TYPE = 0
