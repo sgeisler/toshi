@@ -1,12 +1,21 @@
-FROM ruby:2.1
-RUN apt-get update -qq && apt-get install -y libpq-dev
+# Start with an Ubuntu 14.04 image with ruby 2.1.2
+FROM quay.io/coinbase/rails:latest
 
-RUN mkdir -p /toshi
+# Install dependencies
+RUN apt-get -y install libpq-dev
+RUN gem install bundler
+
+# Install gems
+ADD Gemfile /toshi/Gemfile
+ADD Gemfile.lock /toshi/Gemfile.lock
 WORKDIR /toshi
-
-ADD Gemfile /toshi/
-ADD Gemfile.lock /toshi/
 RUN bundle install
 
-COPY . /toshi
+# Add the source dir
+ADD . /toshi
+
+# Copy the config template
+ADD config/toshi.yml.example /toshi/config/toshi.yml
+
+# Expose port 5000 of the container to the host
 EXPOSE 5000
