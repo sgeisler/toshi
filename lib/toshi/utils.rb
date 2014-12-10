@@ -84,12 +84,18 @@ module Toshi
     end
 
     def synchronized(lock_id, &block)
-      # See: http://practiceovertheory.com/blog/2013/07/06/distributed-locking-in-postgres/
-      # See also: http://www.postgresql.org/docs/9.1/static/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
-      Toshi.db.run("select pg_advisory_lock(#{lock_id})")
-      block.call
-    ensure
-      Toshi.db.run("select pg_advisory_unlock(#{lock_id})")
+      # We need to be sure the lock/unlock both happen on the same database connection
+      # See: https://github.com/coinbase/toshi/issues/127#issuecomment-66498497
+      Toshi.db.synchronize do
+        # See: http://practiceovertheory.com/blog/2013/07/06/distributed-locking-in-postgres/
+        # See also: http://www.postgresql.org/docs/9.1/static/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS
+        Toshi.db.run("select pg_advisory_lock(#{lock_id})")
+        begin
+          block.call
+        ensure
+          Toshi.db.run("select pg_advisory_unlock(#{lock_id})")
+        end
+      end
     end
   end
 
