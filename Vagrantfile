@@ -32,4 +32,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     v.functional_vboxsf     = false
   end
 
+  config.ssh.insert_key = false
+
 end
