@@ -637,4 +637,26 @@ describe Toshi::Web::Api, :type => :request do
       expect(json['pool']).to eq('memory')
     end
   end
+
+  describe 'verify we properly handle /addresses/:hash/unspent_outputs' do
+    it 'make sure we find unspent outputs with proper confirmations' do
+      processor = Toshi::Processor.new
+      blockchain = Blockchain.new
+
+      blockchain.load_from_json("simple_chain_1.json")
+      blockchain.chain['main'].each{|height, block|
+        processor.process_block(block, raise_errors=true)
+      }
+
+      tx = blockchain.chain['main']['0'].tx[0]
+      script = Bitcoin::Script.new(tx.outputs[0].pk_script)
+      address = script.get_addresses[0]
+
+      get "/addresses/#{address}/unspent_outputs"
+      expect(last_response).to be_ok
+      json = JSON.parse(last_response.body)
+      expect(json[0]['confirmations']).to eq(Toshi::Models::Block.count)
+    end
+  end
+
 end
