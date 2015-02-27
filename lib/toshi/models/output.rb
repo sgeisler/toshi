@@ -50,25 +50,29 @@ module Toshi
 
         # get confirmations
         confirmations_by_hash = {}
+
         tx_hashes = outputs.map{|output| output.hsh }
-        Transaction.where(hsh: tx_hashes.uniq).each do |tx|
-          confirmations_by_hash[tx.hsh] = max_height - tx.height
+        unless tx_hashes.empty?
+          Transaction.where(hsh: tx_hashes.uniq).each do |tx|
+            confirmations_by_hash[tx.hsh] = max_height - tx.height + 1
+          end
+
+          outputs.each do |output|
+            parsed_script = Bitcoin::Script.new(output.script)
+            o = {}
+            o[:transaction_hash] = output.hsh
+            o[:output_index] = output.position
+            o[:amount] = output.amount
+            o[:script] = parsed_script.to_string
+            o[:script_hex] = output.script.unpack("H*")[0]
+            o[:script_type] = parsed_script.type
+            o[:addresses] = (parsed_script.get_addresses rescue ['unknown'])
+            o[:spent] = output.spent
+            o[:confirmations] = confirmations_by_hash[output.hsh]
+            output_hashes << o
+          end
         end
 
-        outputs.each do |output|
-          parsed_script = Bitcoin::Script.new(output.script)
-          o = {}
-          o[:transaction_hash] = output.hsh
-          o[:output_index] = output.position
-          o[:amount] = output.amount
-          o[:script] = parsed_script.to_string
-          o[:script_hex] = output.script.unpack("H*")[0]
-          o[:script_type] = parsed_script.type
-          o[:addresses] = (parsed_script.get_addresses rescue ['unknown'])
-          o[:spent] = output.spent
-          o[:confirmations] = confirmations_by_hash[output.hsh]
-          output_hashes << o
-        end
         output_hashes
       end
     end
