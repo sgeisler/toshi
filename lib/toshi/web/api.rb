@@ -199,14 +199,9 @@ module Toshi
 
         case format
         when 'json'
-          begin
-            # Make sure the :time param is a UNIX timestamp
-            DateTime.strptime(params[:time].to_s, '%s')
-            time = params[:time].to_i
-          rescue
-            time = Time.now.to_i
-          end
-          { balance: @address.balance_at(time) }.to_json
+          raise BadRequestError unless params[:time] && params[:time].is_a?(Integer)
+
+          { balance: @address.balance_at(params[:time]) }.to_json
         else
           raise InvalidFormatError
         end

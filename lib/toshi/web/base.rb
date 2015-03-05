@@ -22,6 +22,11 @@ module Toshi
         [406, {error: "Response format is not supported"}.to_json]
       end
 
+      error BadRequestError do
+        content_type 'application/json'
+        [400, {error: "Bad request"}.to_json]
+      end
+
       def pretty_number(number)
         number.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
       end
