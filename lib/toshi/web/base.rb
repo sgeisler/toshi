@@ -7,6 +7,7 @@ module Toshi
     class Base < ::Sinatra::Base
       NotFoundError      = Class.new(StandardError)
       InvalidFormatError = Class.new(StandardError)
+      BadRequestError    = Class.new(StandardError)
 
       set :root,            File.dirname(File.dirname(File.dirname(__FILE__)))
       set :public_folder,   Proc.new { File.join(root, "toshi/web/static") }
