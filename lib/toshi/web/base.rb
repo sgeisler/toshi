@@ -7,6 +7,7 @@ module Toshi
     class Base < ::Sinatra::Base
       NotFoundError      = Class.new(StandardError)
       InvalidFormatError = Class.new(StandardError)
+      BadRequestError    = Class.new(StandardError)
 
       set :root,            File.dirname(File.dirname(File.dirname(__FILE__)))
       set :public_folder,   Proc.new { File.join(root, "toshi/web/static") }
@@ -20,6 +21,11 @@ module Toshi
       error InvalidFormatError do
         content_type 'application/json'
         [406, {error: "Response format is not supported"}.to_json]
+      end
+
+      error BadRequestError do
+        content_type 'application/json'
+        [400, {error: "Bad request"}.to_json]
       end
 
       def pretty_number(number)
