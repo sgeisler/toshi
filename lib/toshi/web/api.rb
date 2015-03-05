@@ -199,9 +199,10 @@ module Toshi
 
         case format
         when 'json'
-          raise BadRequestError unless params[:time] && params[:time].is_a?(Integer)
-
-          { balance: @address.balance_at(params[:time]) }.to_json
+          {
+            balance: @address.balance_at(params[:time].to_i),
+            time: Time.at(params[:time].to_i).utc
+          }.to_json
         else
           raise InvalidFormatError
         end
