@@ -2,8 +2,6 @@ VAGRANTFILE_API_VERSION = "2"
 COREOS_UPDATE_CHANNEL = "alpha"
 VB_MEMORY = 1024
 VB_CPUS = 1
-PRIVATE_KEY_PATH = ENV['TOSHI_VAGRANT_PRIVATE_KEY_PATH']
-PASSWORD = ENV['TOSHI_VAGRANT_PASSWORD']
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
@@ -34,12 +32,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     v.functional_vboxsf     = false
   end
 
-  if PRIVATE_KEY_PATH
-    config.ssh.private_key_path = PRIVATE_KEY_PATH
-  elsif PASSWORD
-    config.ssh.password = PASSWORD
-  else
-    config.ssh.insert_key = false
-  end
+  config.ssh.insert_key = false
 
 end
