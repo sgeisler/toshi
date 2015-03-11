@@ -161,6 +161,8 @@ Toshi will use the `config/toshi.yml.example` file if the `config/toshi.yml` fil
 You can run the test suite for Toshi as follows:
 
     $ rake db:create TOSHI_ENV=test
+    $ git submodule init
+    $ git submodule update
     $ rspec
 
 ## Contributing
