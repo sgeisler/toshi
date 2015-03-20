@@ -183,6 +183,37 @@ describe Toshi::Web::Api, :type => :request do
     end
   end
 
+  describe "GET /addresses/<hash>/balance.<format>" do
+    it "fails if not requesting json" do
+      get '/addresses/mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz/balance_at.xml'
+      expect(json['error']).to eq("Response format is not supported")
+    end
+
+    it "returns balance, target address and block info" do
+      get '/addresses/mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz/balance_at.json'
+      expect(json['balance']).to eq(5_000_000_000)
+      expect(json['address']).to eq("mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz")
+      expect(json['block_height']).to eq(7)
+      expect(json['block_time']).to eq(1402184413)
+    end
+
+    it "will return a balance of 0 if there are no transactions found" do
+      get '/addresses/mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz/balance_at.json?time=5'
+      expect(json['balance']).to eq(0)
+      expect(json['address']).to eq("mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz")
+      expect(json['block_height']).to eq(5)
+      expect(json['block_time']).to eq(1402184357)
+    end
+
+    it "uses block height if time is below five hundred thousand" do
+      get '/addresses/mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz/balance_at.json?time=6'
+      expect(json['balance']).to eq(5_000_000_000)
+      expect(json['address']).to eq("mw851HctCPZUuRCC4KktwKCJQqBz9Xwohz")
+      expect(json['block_height']).to eq(6)
+      expect(json['block_time']).to eq(1402184385)
+    end
+  end
+
   describe "Test filled previous output info for inputs to reorg blockchain transactions" do
     # helper used by the two test cases: check API output for 3A, 4A and 5A.
     # they're interesting because they end up on the tip after reorg.

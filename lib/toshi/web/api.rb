@@ -197,11 +197,17 @@ module Toshi
         @address = Toshi::Models::Address.where(address: params[:address]).first
         raise NotFoundError unless @address
 
+        time = params[:time]
+        time = Time.now if !time || time.to_i == 0
+        block = Toshi::Models::Block.from_time(time.to_i)
+
         case format
         when 'json'
           {
-            balance: @address.balance_at(params[:time].to_i),
-            time: Time.at(params[:time].to_i).utc
+            balance: @address.balance_at(block.height),
+            address: @address.address,
+            block_height: block.height,
+            block_time: block.time
           }.to_json
         else
           raise InvalidFormatError
