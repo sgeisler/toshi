@@ -1,4 +1,4 @@
-web:
+web: &web
   build: .
   links:
    - db
@@ -8,7 +8,27 @@ web:
   environment:
     DATABASE_URL: postgres://postgres:postgres@db:5432/toshi_development
     REDIS_URL: redis://redis/0
-    RACK_ENV: development
+    TOSHI_ENV: development
+  command: bundle exec puma
+test:
+  <<: *web
+  environment:
+    DATABASE_URL: postgres://postgres:postgres@db:5432/toshi_test
+    REDIS_URL: redis://redis/1
+    TOSHI_ENV: test
+  command: bundle exec rspec
+blockworker:
+  <<: *web
+  command: bundle exec sidekiq -q blocks -c 1 -r ./config/environment.rb
+  ports: []
+transactionworker:
+  <<: *web
+  command: bundle exec sidekiq -q transactions -c 1 -r ./config/environment.rb
+  ports: []
+peermanager:
+  <<: *web
+  command: bundle exec ruby bin/peer_manager.rb
+  ports: []
 db:
   image: "postgres:9.3"
 redis:

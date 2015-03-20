@@ -63,21 +63,11 @@ This is the easiest way to get up and running. You can also run your own version
 
 ### Running Toshi locally
 
-Toshi uses [Vagrant](http://www.vagrantup.com/) to install and run all prerequisites (postgresql, redis).
-
     $ git clone https://github.com/coinbase/toshi.git
     $ cd toshi
-    $ vagrant up
-    $ createdb -U postgres -h 127.0.0.1 -p 21001 toshi_development
-    $ createdb -U postgres -h 127.0.0.1 -p 21001 toshi_test
-    $ gem install bundler
-    $ bundle install
-    $ bundle exec rake db:migrate
-    $ foreman start
-    $ open http://localhost:5000/
 
-Alternatively, you can use [Docker](https://www.docker.com/) with [Docker
-Compose](http://docs.docker.com/compose/install/):
+We use [Docker](https://www.docker.com/) with
+[Docker Compose](http://docs.docker.com/compose/install/):
 
     $ docker-compose build
     $ docker-compose start db
@@ -86,6 +76,14 @@ Compose](http://docs.docker.com/compose/install/):
     $ docker-compose build # run this before `up` to run the latest code
     $ docker-compose up
     $ open web:5000
+
+To run tests:
+
+    $ docker-compose build
+    $ docker-compose run test bundle exec rake db:create
+
+    $ docker-compose run test
+
 
 ### Bootstrap.dat
 

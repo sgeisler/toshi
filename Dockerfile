@@ -1,5 +1,8 @@
 FROM ruby:2.1
-RUN apt-get update -qq && apt-get install -y libpq-dev postgresql-client
+RUN apt-get update -qq && apt-get install -y \
+  libpq-dev \
+  postgresql-client \
+  default-jre
 
 RUN mkdir -p /toshi
 WORKDIR /toshi
