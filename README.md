@@ -76,10 +76,16 @@ Toshi uses [Vagrant](http://www.vagrantup.com/) to install and run all prerequis
     $ foreman start
     $ open http://localhost:5000/
 
-Alternatively, you can use [Docker](https://www.docker.com/):
+Alternatively, you can use [Docker](https://www.docker.com/) with [Docker
+Compose](http://docs.docker.com/compose/install/):
 
-    $ docker build -t=coinbase/toshi .
-    $ docker run -e REDIS_URL=redis://... -e DATABASE_URL=postgres://... -e TOSHI_ENV=production coinbase/toshi foreman start
+    $ docker-compose build
+    $ docker-compose start db
+    $ docker-compose run web bundle exec rake db:create
+
+    $ docker-compose build # run this before `up` to run the latest code
+    $ docker-compose up
+    $ open web:5000
 
 ### Bootstrap.dat
 

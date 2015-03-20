@@ -28,9 +28,8 @@ namespace :db do
     db_name = db_uri.path[1..-1]
     ENV["PGPASSWORD"] = db_uri.password
     sys_db_args = "-p #{db_port} -h #{db_host} -U #{db_user}"
-    system "dropdb #{sys_db_args} #{db_name}"
-    system "createdb #{sys_db_args} #{db_name}"
-    system "bundle exec sequel -E -m db/migrations #{Toshi.settings[:database_url]}"
+    sh "dropdb #{sys_db_args} #{db_name} || true" # drop if exists
+    sh "createdb #{sys_db_args} #{db_name}"
     Rake::Task['db:migrate'].invoke
   end
 end
