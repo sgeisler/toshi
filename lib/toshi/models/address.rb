@@ -21,15 +21,10 @@ module Toshi
         Toshi.db[:unspent_outputs].where(address_id: id).sum(:amount).to_i || 0
       end
 
-      # t = epoch time
-      def balance_at(t=nil)
-        t = Time.now.to_i if !t || t == 0
-        # first we need to find the block height
-        block = Block.order(Sequel.desc(:time)).where(time: 0..t).first
-        return 0 unless block
+      def balance_at(block_height)
         # sum the ledger entries for this address on the main branch up to this height
         Toshi.db[:address_ledger_entries].where(address_id: id).join(:transactions, :id => :transaction_id)
-          .where(pool: Transaction::TIP_POOL).where("height <= #{block.height}").sum(:amount).to_i || 0
+          .where(pool: Transaction::TIP_POOL).where("height <= #{block_height}").sum(:amount).to_i || 0
       end
 
       def transactions(offset=0, limit=100)
