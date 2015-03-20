@@ -1,5 +1,5 @@
 FROM ruby:2.1
-RUN apt-get update -qq && apt-get install -y libpq-dev
+RUN apt-get update -qq && apt-get install -y libpq-dev postgresql-client
 
 RUN mkdir -p /toshi
 WORKDIR /toshi
@@ -9,4 +9,7 @@ ADD Gemfile.lock /toshi/
 RUN bundle install
 
 COPY . /toshi
+
 EXPOSE 5000
+
+CMD ["foreman", "start"]
