@@ -15,4 +15,4 @@ COPY . /toshi
 
 EXPOSE 5000
 
-CMD ["foreman", "start"]
+CMD ["bundle", "exec", "puma"]

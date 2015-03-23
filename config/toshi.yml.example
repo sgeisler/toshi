@@ -1,5 +1,5 @@
 development: &development
-  database_url: <%= ENV['DATABASE_URL'] || 'postgres://postgres:@postgres/toshi_development' %>
+  database_url: <%= ENV['DATABASE_URL'] || 'postgres://postgres:@db:5432/toshi_development' %>
   log_level: <%= ENV['LOG_LEVEL'] || 'debug' %>
   max_peers: 8
   network: <%= ENV['TOSHI_NETWORK'] || 'testnet3' %>
@@ -8,7 +8,7 @@ development: &development
 
 test:
   <<: *development
-  database_url: <%= ENV['DATABASE_URL'] || 'postgres://postgres:@postgres/toshi_test' %>
+  database_url: <%= ENV['DATABASE_URL'] || 'postgres://postgres:@db:5432/toshi_test' %>
   log_level: <%= ENV['LOG_LEVEL'] || 'info' %>
   max_peers: 1
   redis_url: <%= ENV['REDIS_URL'] || 'redis://redis/1' %>

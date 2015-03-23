@@ -75,14 +75,18 @@ We use [Docker](https://www.docker.com/) with
 
     $ docker-compose build # run this before `up` to run the latest code
     $ docker-compose up
-    $ open web:5000
+    $ open localdocker:5000 # use `boot2docker ip` for the address if using boot2docker
 
-To run tests:
+## Testing
 
+You can run the test suite for Toshi as follows:
+
+    $ git submodule init
+    $ git submodule update
     $ docker-compose build
-    $ docker-compose run test bundle exec rake db:create
+    $ docker-compose run -e TOSHI_ENV=test web bundle exec rake db:create
 
-    $ docker-compose run test
+    $ docker-compose run -e TOSHI_ENV=test web bundle exec rspec
 
 
 ### Bootstrap.dat
@@ -160,14 +164,6 @@ Toshi parses `config/toshi.yml` according to its current environment (determined
 
 Toshi will use the `config/toshi.yml.example` file if the `config/toshi.yml` file does not exist.
 
-## Testing
-
-You can run the test suite for Toshi as follows:
-
-    $ rake db:create TOSHI_ENV=test
-    $ git submodule init
-    $ git submodule update
-    $ rspec
 
 ## Contributing
 
