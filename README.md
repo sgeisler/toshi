@@ -63,21 +63,11 @@ This is the easiest way to get up and running. You can also run your own version
 
 ### Running Toshi locally
 
-Toshi uses [Vagrant](http://www.vagrantup.com/) to install and run all prerequisites (postgresql, redis).
-
     $ git clone https://github.com/coinbase/toshi.git
     $ cd toshi
-    $ vagrant up
-    $ createdb -U postgres -h 127.0.0.1 -p 21001 toshi_development
-    $ createdb -U postgres -h 127.0.0.1 -p 21001 toshi_test
-    $ gem install bundler
-    $ bundle install
-    $ bundle exec rake db:migrate
-    $ foreman start
-    $ open http://localhost:5000/
 
-Alternatively, you can use [Docker](https://www.docker.com/) with [Docker
-Compose](http://docs.docker.com/compose/install/):
+We use [Docker](https://www.docker.com/) with
+[Docker Compose](http://docs.docker.com/compose/install/):
 
     $ docker-compose build
     $ docker-compose start db
@@ -85,7 +75,19 @@ Compose](http://docs.docker.com/compose/install/):
 
     $ docker-compose build # run this before `up` to run the latest code
     $ docker-compose up
-    $ open web:5000
+    $ open localdocker:5000 # use `boot2docker ip` for the address if using boot2docker
+
+## Testing
+
+You can run the test suite for Toshi as follows:
+
+    $ git submodule init
+    $ git submodule update
+    $ docker-compose build
+    $ docker-compose run -e TOSHI_ENV=test web bundle exec rake db:create
+
+    $ docker-compose run -e TOSHI_ENV=test web bundle exec rspec
+
 
 ### Bootstrap.dat
 
@@ -162,14 +164,6 @@ Toshi parses `config/toshi.yml` according to its current environment (determined
 
 Toshi will use the `config/toshi.yml.example` file if the `config/toshi.yml` file does not exist.
 
-## Testing
-
-You can run the test suite for Toshi as follows:
-
-    $ rake db:create TOSHI_ENV=test
-    $ git submodule init
-    $ git submodule update
-    $ rspec
 
 ## Contributing
 
