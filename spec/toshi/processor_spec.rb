@@ -1323,5 +1323,43 @@ describe Toshi::Processor do
       expect(Toshi::Models::UnconfirmedTransaction.where(pool: Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL).count).to eq(1)
       expect(Toshi::Models::UnconfirmedTransaction.where(hsh: tx.hash).first.pool).to eq(Toshi::Models::UnconfirmedTransaction::CONFLICT_POOL)
     end
+
+    it 'handles BIP66 block version switch-over' do
+      processor = Toshi::Processor.new
+      blockchain = Blockchain.new
+      Bitcoin.network = :bitcoin
+
+      blockchain.load_from_json("bip66_test.json")
+
+      # find the two rejects
+      expect(blockchain.chain['reject'].values.size).to eq(2)
+      expected_reject_1 = blockchain.chain['reject'].values.first.hash
+      expected_reject_2 = blockchain.chain['reject'].values.last.hash
+      reject_1, reject_2 = nil, nil
+
+      blockchain.blocks.each do |block|
+        height = Toshi::Models::Block.max_height
+        if reject_1 == nil && height == 850
+          # attempts to use a non-DERSIG compliant signature
+          reject_1 = block.hash
+          expect {
+            processor.process_block(block, raise_errors=true)
+          }.to raise_error(Toshi::Processor::TxValidationError, "Script evaluation failed")
+        elsif reject_2 == nil && height == 1051
+          # attempts a v2 block post-switchover
+          expect(block.ver).to eq(2)
+          reject_2 = block.hash
+          expect {
+            processor.process_block(block, raise_errors=true)
+          }.to raise_error(Toshi::Processor::BlockValidationError, "AcceptBlock() : rejected nVersion=2 block #{block.hash}")
+        else
+          processor.process_block(block, raise_errors=true)
+        end
+      end
+
+      expect(reject_1).to eq(expected_reject_1)
+      expect(reject_2).to eq(expected_reject_2)
+      expect(Toshi::Models::Block.max_height).to eq(1052)
+    end
   end
 end

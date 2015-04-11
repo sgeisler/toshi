@@ -243,7 +243,7 @@ module Toshi
       # This is done last to help prevent CPU exhaustion denial-of-service attacks.
 
       last_block = @storage.block_header_for_hash(@storage.mainchain_tip_hash)
-      if !check_inputs(last_block, tx, state, check_scripts=true, strict_p2sh=true, include_memory_pool=true)
+      if !check_inputs(last_block, tx, state, check_scripts=true, strict_p2sh=true, include_memory_pool=true, verify_dersig=true)
         raise TxValidationError, "AcceptToMemoryPool() : ConnectInputs failed #{tx.hash}"
         return false
       end
@@ -631,6 +631,14 @@ module Toshi
         end
       end
 
+      # BIP66: Reject block.nVersion=2 blocks when 95% (75% on testnet) of the network has upgraded:
+      if block.ver < 3
+        if ((!is_testnet? && verify_block_version_super_majority(3, prev_block_header, 950, 1000)) ||
+            (is_testnet? && verify_block_version_super_majority(3, prev_block_header, 75,  100)))
+          raise BlockValidationError, "AcceptBlock() : rejected nVersion=2 block #{block.hash}"
+        end
+      end
+
       # BIP34 Part 2. Enforce block.nVersion=2 rule that the coinbase starts with the serialized block height
       if block.ver >= 2
         # if 750 of the last 1,000 blocks are version 2 or greater (51/100 if testnet)
@@ -904,6 +912,20 @@ module Toshi
       #unsigned int flags = SCRIPT_VERIFY_NOCACHE |
       #                     (fStrictPayToScriptHash ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE);
 
+      verify_dersig = false
+
+      # Start enforcing the DERSIG (BIP66) rules, for block.nVersion=3 blocks, when 75% of the network has upgraded:
+      if block.ver >= 3
+        prev_block_header = @storage.block_header_for_hash(block.prev_block_hex)
+        # if 750 of the last 1,000 blocks are version 3 or greater (51/100 if testnet)
+        if ((!is_testnet? && verify_block_version_super_majority(3, prev_block_header, 750, 1000)) ||
+            (is_testnet? && verify_block_version_super_majority(3, prev_block_header, 51,  100)))
+          # DER signature is required.
+          # See: https://github.com/bitcoin/bips/blob/master/bip-0066.mediawiki
+          verify_dersig = true
+        end
+      end
+
       # Will count total fees (to verify block balance)
       fees = 0
 
@@ -952,7 +974,7 @@ module Toshi
           fees += tx_value_in(tx) - tx_value_out(tx)
 
           # Actually check scripts. See CheckInputs() in bitcoind.
-          if !self.check_inputs(block, tx, state, check_scripts, strict_p2sh, include_memory_pool=false)
+          if !self.check_inputs(block, tx, state, check_scripts, strict_p2sh, include_memory_pool=false, verify_dersig)
             return false
           end
 
@@ -1035,8 +1057,10 @@ module Toshi
     # state - validation state
     # check_scripts - flag; if false, script evaluation can be skipped.
     # strict_p2sh - flag; if false, P2SH scripts are not evaluated.
+    # include_memory_pool - flag; if true, also look for inputs in the memory pool
+    # verify_dersig - flag; if true, reject non-DER encoded signatures
     # See CheckInputs() in bitcoind.
-    def check_inputs(block, tx, state, check_scripts, strict_p2sh, include_memory_pool)
+    def check_inputs(block, tx, state, check_scripts, strict_p2sh, include_memory_pool, verify_dersig)
       return true if tx.is_coinbase?
 
       if !self.verify_inputs_are_available(tx, include_memory_pool)
@@ -1115,7 +1139,7 @@ module Toshi
             end
             script_pubkey = txout.pk_script
             #puts "Script check: #{script_pubkey.inspect}"
-            if !tx.verify_input_signature(i, script_pubkey, block.time)
+            if !tx.verify_input_signature(i, script_pubkey, block.time, { verify_dersig: !!verify_dersig })
               raise TxValidationError, "Script evaluation failed"
               false
             end

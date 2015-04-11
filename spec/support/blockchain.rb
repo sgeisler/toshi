@@ -12,12 +12,12 @@ class Blockchain
   attr_accessor :blocks
   attr_accessor :p2sh
 
-  def initialize
-    @chain = { main: {}, side: {}, orphan: {} }
+  def initialize(time_offset=3600*2) # default is two hours ago
+    @chain = { main: {}, side: {}, orphan: {}, reject: {} }
     @wallet = {}
     @blocks = [] # in order to be processed
     @p2sh = {}
-    @time = Time.now.to_i - (3600*2) # 2 hours ago
+    @time = Time.now.to_i - time_offset
     set_network_rules
   end
 
@@ -58,11 +58,11 @@ class Blockchain
     Bitcoin::P::Tx.new(tx.to_payload)
   end
 
-  def build_next_block(prev_block, next_height, txs=[], time=Time.now.to_i, fees=0, key=nil)
+  def build_next_block(prev_block, next_height, txs=[], time=Time.now.to_i, fees=0, key=nil, version=2)
     b = Bitcoin::P::Block.new(nil)
     b.prev_block = prev_block ? prev_block.hash.htb.reverse : "\x00"*32
     b.bits = prev_block ? prev_block.bits : Bitcoin.network[:proof_of_work_limit]
-    b.ver, b.nonce, b.time = 2, 0, time
+    b.ver, b.nonce, b.time = version, 0, time
     b.tx = [ build_coinbase_tx(next_height, fees, key), *txs ]
     b.mrkl_root = Bitcoin.hash_mrkl_tree(b.tx.map(&:hash)).last.htb.reverse
 
@@ -132,7 +132,9 @@ class Blockchain
       Bitcoin.network[k.to_sym] = v
     end
 
-    ['main', 'side','orphan'].each{|branch|
+    ['main', 'side', 'orphan', 'reject'].each{|branch|
+      # older fixtures won't have a reject branch
+      next unless @chain[branch]
       @chain[branch].each{|k,v|
         if v.is_a?(Array)
           @chain[branch][k] = v.map{|e| Bitcoin::P::Block.from_hash(e) }
