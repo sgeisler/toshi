@@ -123,8 +123,8 @@ module Toshi
       send_data( Bitcoin::Protocol.getdata_pkt(:tx, [hash]) )
     end
 
-    def on_inv_block(hash)
-      log ">> inv block: #{hash.hth}"
+    def on_inv_block_v2(hash, idx, count)
+      log ">> inv block: #{hash.hth} #{idx}:#{count}"
       if block = Toshi::Models::Block.where(hsh: hash.hth).first
         log "already have block" if @debug
         if block.is_orphan_chain?
@@ -141,7 +141,20 @@ module Toshi
           # bitcoind sends another 'getblocks' if it gets an inv for an existing orphan.
           log "block is on orphan chain, sending getblocks" if @debug
           send_getblocks
+        else
+          last_block = count - 1
+          if idx == last_block
+            #
+            # From Bitcoin Core 0.8:
+            # In case we are on a very long side-chain, it is possible that we already have
+            # the last block in an inv bundle sent in response to getblocks. Try to detect
+            # this situation and push another getblocks to continue.
+            #
+            locator = Toshi::Models::Block.getblocks_locator(block)
+            send_getblocks(locator)
+          end
         end
+
         # already processed it.
         return
       end
