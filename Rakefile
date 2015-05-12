@@ -5,6 +5,22 @@ task :bundle do
 end
 
 namespace :db do
+  def db_uri
+    URI(Toshi.settings[:database_url])
+  end
+
+  def db_name
+    db_uri.path[1..-1]
+  end
+
+  def sys_db_args
+    db_port = db_uri.port
+    db_host = db_uri.host
+    db_user = db_uri.user
+
+    "-p #{db_port} -h #{db_host} -U #{db_user}"
+  end
+
   desc "Run database migrations"
   task :migrate, [:version] do |t, args|
     Sequel.extension :migration
@@ -19,18 +35,28 @@ namespace :db do
     end
   end
 
-  desc "Create test and dev databases"
-  task :create do
-    db_uri = URI(Toshi.settings[:database_url])
-    db_port = db_uri.port
-    db_host = db_uri.host
-    db_user = db_uri.user
-    db_name = db_uri.path[1..-1]
+  task :set_pg_password do
     ENV["PGPASSWORD"] = db_uri.password
-    sys_db_args = "-p #{db_port} -h #{db_host} -U #{db_user}"
+  end
+
+
+  desc "Create test and dev databases"
+  task create: [:set_pg_password] do
     sh "dropdb #{sys_db_args} #{db_name} || true" # drop if exists
     sh "createdb #{sys_db_args} #{db_name}"
     Rake::Task['db:migrate'].invoke
+  end
+
+  desc "Create a copy of the database"
+  task :dump, [:filename] => [:set_pg_password] do |t, args|
+    filename = args[:filename] || 'latest.dump'
+    sh "pg_dump -Fc --no-acl --no-owner #{sys_db_args} #{db_name} > #{filename}"
+  end
+
+  desc "Restore database from a past dump"
+  task :restore, [:filename] do |t, args|
+    filename = args[:filename] || 'latest.dump'
+    sh "pg_restore --verbose --clean --no-acl --no-owner #{sys_db_args} -d #{db_name} #{filename}"
   end
 end
 
