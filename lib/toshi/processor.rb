@@ -172,7 +172,7 @@ module Toshi
       end
 
       # Rather not work on nonstandard transactions.
-      if require_standard?
+      if require_standard? && !on_disconnect
         is_standard, reason = self.is_standard_tx?(tx)
         if !is_standard
           raise TxValidationError, "AcceptToMemoryPool() : nonstandard transaction: #{reason}"
@@ -226,7 +226,7 @@ module Toshi
 
       # Check for non-standard pay-to-script-hash in inputs
 
-      if require_standard?
+      if require_standard? && !on_disconnect
         if !are_inputs_standard?(tx)
           raise TxValidationError, "AcceptToMemoryPool() : nonstandard transaction input"
           return false
