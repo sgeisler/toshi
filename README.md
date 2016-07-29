@@ -70,11 +70,9 @@ We use [Docker](https://www.docker.com/) with
 [Docker Compose](http://docs.docker.com/compose/install/):
 
     $ docker-compose build
-    $ docker-compose start db
+    $ docker-compose up -d db
     $ docker-compose run web bundle exec rake db:create
-
-    $ docker-compose build # run this before `up` to run the latest code
-    $ docker-compose up
+    $ docker-compose up -d
     $ open localdocker:5000 # use `boot2docker ip` for the address if using boot2docker
 
 ## Testing
